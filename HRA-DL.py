@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 🔧 RUTA DE DESCARGA (Termux)
 # ==========================================
-BASE_DOWNLOAD_PATH = "/content/drive"
+BASE_DOWNLOAD_PATH = "/content/drive/MyDrive"
 # ==========================================
 
 session = requests.Session()
