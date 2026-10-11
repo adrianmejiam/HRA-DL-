@@ -154,6 +154,9 @@ def sanitizeFname(fname):
         return re.sub('/', '-', fname)
 
 def main(userData):
+    if args.url:
+    url = args.url.strip()
+else:
     url = input("Input HIGHRESAUDIO Store URL: ").strip()
 
     if not url:
