@@ -13,18 +13,35 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HRA-DL Web Downloader</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .clock-badge {
+            font-family: monospace;
+            font-size: 0.9rem;
+            background-color: #212529;
+            color: #0d6efd;
+            padding: 5px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container py-5">
+<body class="bg-light d-flex flex-column min-vh-100">
+    <div class="container py-5 my-auto">
         <div class="row justify-content-center">
             <div class="col-md-8">
+                <!-- Encabezado con Reloj -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted small">HighResAudio Automated System</span>
+                    <div id="live-clock" class="clock-badge">00:00:00</div>
+                </div>
+
                 <div class="card shadow-sm">
                     <div class="card-header bg-dark text-white text-center py-3">
                         <h3 class="mb-0">HighResAudio Downloader</h3>
-                        <small class="text-muted">Descarga música en alta resolución con metadatos e imágenes</small>
+                        <small class="text-muted">Descarga música en alta resolución con formato y metadatos personalizados</small>
                     </div>
                     <div class="card-body p-4">
-                        <!-- Alertas dinámicas -->
                         <div id="alert-container"></div>
 
                         <form id="download-form">
@@ -32,16 +49,22 @@ HTML_TEMPLATE = """
                                 <label for="url" class="form-label font-weight-bold">Enlace del Álbum o Pista de HighResAudio:</label>
                                 <input type="url" class="form-control" id="url" name="url" required 
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
-                                <div class="form-text">El proceso puede tardar unos minutos dependiendo del tamaño del álbum.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="format" class="form-label font-weight-bold">Formato de audio:</label>
+                                <select class="form-select" id="format" name="format">
+                                    <option value="flac" selected>FLAC (Sin pérdida - Recomendado)</option>
+                                    <option value="wav">WAV (Sin comprimir)</option>
+                                </select>
                             </div>
                             
-                            <!-- Barra de progreso oculta inicialmente -->
                             <div id="progress-container" class="mb-3 d-none">
                                 <label class="form-label text-primary fw-bold" id="status-text">Procesando descarga...</label>
                                 <div class="progress" style="height: 25px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
                                          role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
-                                        Descargando y guardando archivos...
+                                        Descargando y convirtiendo archivos...
                                     </div>
                                 </div>
                             </div>
@@ -52,20 +75,37 @@ HTML_TEMPLATE = """
                         </form>
                     </div>
                 </div>
+
+                <!-- Créditos del Desarrollador -->
+                <div class="text-center mt-4 text-muted small">
+                    Desarrollado con ❤️ para amantes de la música en alta fidelidad | &copy; 2026
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Función del reloj en tiempo real
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('live-clock').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Control de envío por formulario asíncrono
         document.getElementById('download-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const urlInput = document.getElementById('url').value;
+            const formatInput = document.getElementById('format').value;
             const progressContainer = document.getElementById('progress-container');
             const btnContainer = document.getElementById('btn-container');
             const alertContainer = document.getElementById('alert-container');
             
-            // Limpiar alertas previas y mostrar barra de carga
             alertContainer.innerHTML = '';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
@@ -76,12 +116,11 @@ HTML_TEMPLATE = """
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: 'url=' + encodeURIComponent(urlInput)
+                    body: 'url=' + encodeURIComponent(urlInput) + '&format=' + encodeURIComponent(formatInput)
                 });
 
                 const data = await response.json();
 
-                // Ocultar barra de carga y mostrar botón
                 progressContainer.classList.add('d-none');
                 btnContainer.classList.remove('d-none');
 
@@ -121,20 +160,21 @@ def index():
 @app.route("/download", methods=["POST"])
 def download():
     song_url = request.form.get("url")
+    audio_format = request.form.get("format", "flac")
     
     if not song_url:
         return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."})
 
     try:
         process = subprocess.run(
-            ["python", "HRA-DL.py", "--url", song_url],
+            ["python", "HRA-DL.py", "--url", song_url, "--format", audio_format],
             capture_output=True,
             text=True,
             timeout=300
         )
 
         if process.returncode == 0:
-            return jsonify({"success": True, "message": "¡Descarga completada con éxito al 100% con metadatos e imágenes!"})
+            return jsonify({"success": True, "message": f"¡Descarga completada con éxito en formato {audio_format.upper()}!"})
         else:
             error_message = process.stderr.strip() or process.stdout.strip() or "Error desconocido durante la ejecución."
             return jsonify({"success": False, "message": f"Error en el proceso: {error_message}"})
