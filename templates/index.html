@@ -2,92 +2,90 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HRA Downloader Web</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #e0e0e0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .container {
-            background-color: #1e1e1e;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            width: 400px;
-            text-align: center;
-        }
-        h2 { color: #bb86fc; margin-bottom: 20px; }
-        input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #333;
-            background-color: #2c2c2c;
-            color: #fff;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
-        button {
-            background-color: #bb86fc;
-            color: #121212;
-            border: none;
-            padding: 10px 20px;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-            width: 100%;
-        }
-        button:hover { background-color: #9965f4; }
-        #status { margin-top: 15px; font-size: 14px; color: #03dac6; }
-    </style>
+    <title>HRA-DL Controller Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-6 flex flex-col justify-between">
+    <div class="max-w-xl mx-auto w-full bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl my-auto">
+        
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-xl font-bold">HRA-DL Controller</h1>
+                <p class="text-xs text-slate-400">Panel de control y configuración de descargas</p>
+            </div>
+            <div id="status-badge" class="px-3 py-1 text-xs rounded-full bg-slate-700 text-slate-300 font-medium">Inactivo</div>
+        </div>
 
-    <div class="container">
-        <h2>HRA Downloader</h2>
-        <input type="text" id="urlInput" placeholder="Pega el enlace del álbum de HighResAudio...">
-        <button onclick="descargarAlbum()">Iniciar Descarga</button>
-        <p id="status"></p>
+        <!-- Formulario -->
+        <div class="space-y-4">
+            <div>
+                <label class="text-xs font-semibold text-slate-300 uppercase">Correo Electrónico</label>
+                <input type="email" id="email" placeholder="correo@ejemplo.com" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
+            </div>
+            
+            <div>
+                <label class="text-xs font-semibold text-slate-300 uppercase">Contraseña</label>
+                <input type="password" id="password" placeholder="••••••••" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs font-semibold text-slate-300 uppercase">Calidad de Audio</label>
+                    <select id="quality" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
+                        <option value="flac-hi-res">FLAC Hi-Res (Máxima)</option>
+                        <option value="flac-cd">FLAC CD Quality</option>
+                        <option value="mp3">MP3 320kbps</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-300 uppercase">Carpeta Destino</label>
+                    <input type="text" id="path" value="./downloads" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 pt-2">
+                <input type="checkbox" id="cover" class="w-4 h-4 text-cyan-500 bg-slate-900 border-slate-700 rounded focus:ring-cyan-500">
+                <label for="cover" class="text-sm text-slate-300">Descargar carátulas de álbumes (Cover art)</label>
+            </div>
+
+            <button onclick="startDownload()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-3 rounded-lg transition shadow-lg shadow-cyan-500/20 mt-4">
+                Iniciar Descarga Configurada
+            </button>
+        </div>
+        
+        <!-- Mensaje de respuesta -->
+        <div id="response-msg" class="mt-4 text-xs text-center text-slate-400"></div>
     </div>
 
     <script>
-        async function descargarAlbum() {
-            const url = document.getElementById('urlInput').value;
-            const statusText = document.getElementById('status');
+        async function startDownload() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const quality = document.getElementById('quality').value;
+            const path = document.getElementById('path').value;
+            const cover = document.getElementById('cover').checked;
+            const msgBox = document.getElementById('response-msg');
+            const badge = document.getElementById('status-badge');
 
-            if (!url) {
-                statusText.style.color = '#cf6679';
-                statusText.innerText = 'Por favor, introduce un enlace válido.';
-                return;
-            }
-
-            statusText.style.color = '#03dac6';
-            statusText.innerText = 'Procesando descarga... Revisa tu terminal.';
+            msgBox.innerText = "Enviando configuración...";
 
             try {
-                const response =- await fetch('/descargar', {
+                const response = await fetch('/api/start-download', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
+                    body: JSON.stringify({ email, password, quality, path, cover })
                 });
-
-                const result = await response.json();
+                
+                const data = await response.json();
                 if (response.ok) {
-                    statusText.innerText = '¡Descarga finalizada con éxito!';
+                    msgBox.innerText = data.message;
+                    badge.className = "px-3 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400 font-medium";
+                    badge.innerText = "Descargando";
                 } else {
-                    statusText.style.color = '#cf6679';
-                    statusText.innerText = 'Error: ' + result.error;
+                    msgBox.innerText = data.message;
                 }
             } catch (error) {
-                statusText.style.color = '#cf6679';
-                statusText.innerText = 'Error de conexión con el servidor.';
+                msgBox.innerText = "Error de conexión con el servidor.";
             }
         }
     </script>
