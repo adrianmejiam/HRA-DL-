@@ -5,7 +5,7 @@ from flask import Flask, render_template_string, request, redirect, url_for, fla
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "clave-secreta-por-defecto")
 
-# Plantilla HTML integrada para la interfaz web con estilos modernos de Bootstrap
+# Plantilla HTML corregida y sin errores de sintaxis en bucles Jinja
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="es">
@@ -32,7 +32,7 @@ HTML_TEMPLATE = """
                                 {{ message }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                               </div>
-                            {% for message in messages %}
+                            {% endfor %}
                           {% endif %}
                         {% endwith %}
 
@@ -41,7 +41,7 @@ HTML_TEMPLATE = """
                                 <label for="url" class="form-label font-weight-bold">Enlace del Álbum o Pista de HighResAudio:</label>
                                 <input type="url" class="form-control" id="url" name="url" required 
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
-                                <div class="form-text">Asegúrate de que tu cuenta de HighResAudio posea permisos activos para la descarga.</div>
+                                <div class="form-text">Asegúrate de que tu cuenta posea permisos activos para la descarga.</div>
                             </div>
                             <div class="d-grid">
                                 <button type="submit" class="btn btn-primary btn-lg">Iniciar Descarga</button>
@@ -70,16 +70,11 @@ def download():
         return redirect(url_for("index"))
 
     try:
-        # Nota: El script HRA-DL original utiliza un archivo de configuración o variables de entorno.
-        # Aquí ejecutamos el script nativo mediante subprocess pasándole la URL como argumento.
-        # Asegúrate de que HRA-DL.py admita recibir la URL por argumento (ej. `python HRA-DL.py --url <URL>`)
-        # o en su defecto, modifica el script principal para aceptar el parámetro.
-        
         process = subprocess.run(
             ["python", "HRA-DL.py", "--url", song_url],
             capture_output=True,
             text=True,
-            timeout=300 # Límite de tiempo de 5 minutos por descarga
+            timeout=300
         )
 
         if process.returncode == 0:
