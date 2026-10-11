@@ -4,3 +4,4 @@ mutagen==1.47.0
 beautifulsoup4==4.12.3
 gunicorn==21.2.0
 tqdm==4.66.2
+imageio-ffmpeg==0.4.9flask==3.0.3
