@@ -2,92 +2,244 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>HRA-DL Controller Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HRA-DL Web Downloader</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            text-align: center;
+            color: #fff;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: white;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            margin-top: 8px;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        progress {
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        progress::-webkit-progress-bar {
+            background-color: #0f172a;
+        }
+
+        progress::-webkit-progress-value {
+            background-color: var(--primary);
+        }
+
+        .status-text {
+            margin-top: 12px;
+            font-size: 0.875rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .download-box {
+            margin-top: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        .btn-download-file {
+            background: #10b981;
+            text-decoration: none;
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .btn-download-file:hover {
+            background: #059669;
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-6 flex flex-col justify-between">
-    <div class="max-w-xl mx-auto w-full bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl my-auto">
-        
-        <div class="flex items-center justify-between mb-6">
-            <div>
-                <h1 class="text-xl font-bold">HRA-DL Controller</h1>
-                <p class="text-xs text-slate-400">Panel de control y configuración de descargas</p>
-            </div>
-            <div id="status-badge" class="px-3 py-1 text-xs rounded-full bg-slate-700 text-slate-300 font-medium">Inactivo</div>
+<body>
+
+    <div class="container">
+        <h1>HRA-DL Web</h1>
+        <p class="subtitle">Gestor de descargas de HighResAudio</p>
+
+        <div class="form-group">
+            <label for="email">Correo electrónico</label>
+            <input type="email" id="email" placeholder="tu_correo@dominio.com">
         </div>
 
-        <!-- Formulario -->
-        <div class="space-y-4">
-            <div>
-                <label class="text-xs font-semibold text-slate-300 uppercase">Correo Electrónico</label>
-                <input type="email" id="email" placeholder="correo@ejemplo.com" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
-            </div>
-            
-            <div>
-                <label class="text-xs font-semibold text-slate-300 uppercase">Contraseña</label>
-                <input type="password" id="password" placeholder="••••••••" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="text-xs font-semibold text-slate-300 uppercase">Calidad de Audio</label>
-                    <select id="quality" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
-                        <option value="flac-hi-res">FLAC Hi-Res (Máxima)</option>
-                        <option value="flac-cd">FLAC CD Quality</option>
-                        <option value="mp3">MP3 320kbps</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-xs font-semibold text-slate-300 uppercase">Carpeta Destino</label>
-                    <input type="text" id="path" value="./downloads" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500">
-                </div>
-            </div>
-
-            <div class="flex items-center space-x-2 pt-2">
-                <input type="checkbox" id="cover" class="w-4 h-4 text-cyan-500 bg-slate-900 border-slate-700 rounded focus:ring-cyan-500">
-                <label for="cover" class="text-sm text-slate-300">Descargar carátulas de álbumes (Cover art)</label>
-            </div>
-
-            <button onclick="startDownload()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-3 rounded-lg transition shadow-lg shadow-cyan-500/20 mt-4">
-                Iniciar Descarga Configurada
-            </button>
+        <div class="form-group">
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" placeholder="••••••••">
         </div>
-        
-        <!-- Mensaje de respuesta -->
-        <div id="response-msg" class="mt-4 text-xs text-center text-slate-400"></div>
+
+        <div class="form-group">
+            <label for="url">URL del Álbum o Pista</label>
+            <input type="url" id="url" placeholder="https://www.highresaudio.com/es/album/...">
+        </div>
+
+        <button id="btnStart" onclick="iniciarProceso()">Generar Archivo de Configuración / Descarga</button>
+
+        <div class="progress-container" id="progressContainer">
+            <progress id="progressBar" value="0" max="100"></progress>
+            <div class="status-text" id="statusText">Procesando solicitud... 0%</div>
+        </div>
+
+        <div class="download-box" id="downloadBox">
+            <p style="color: #10b981; font-weight: 500; font-size: 0.9rem;">¡Sesión y parámetros listos!</p>
+            <a id="downloadLink" class="btn-download-file" download="config.json">Descargar config.json para el script</a>
+        </div>
     </div>
 
     <script>
-        async function startDownload() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const quality = document.getElementById('quality').value;
-            const path = document.getElementById('path').value;
-            const cover = document.getElementById('cover').checked;
-            const msgBox = document.getElementById('response-msg');
-            const badge = document.getElementById('status-badge');
+        function iniciarProceso() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const url = document.getElementById('url').value.trim();
+            const btnStart = document.getElementById('btnStart');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const statusText = document.getElementById('statusText');
+            const downloadBox = document.getElementById('downloadBox');
 
-            msgBox.innerText = "Enviando configuración...";
-
-            try {
-                const response = await fetch('/api/start-download', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, quality, path, cover })
-                });
-                
-                const data = await response.json();
-                if (response.ok) {
-                    msgBox.innerText = data.message;
-                    badge.className = "px-3 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400 font-medium";
-                    badge.innerText = "Descargando";
-                } else {
-                    msgBox.innerText = data.message;
-                }
-            } catch (error) {
-                msgBox.innerText = "Error de conexión con el servidor.";
+            if (!email || !password || !url) {
+                alert('Por favor, completa todos los campos requeridos.');
+                return;
             }
+
+            btnStart.disabled = true;
+            downloadBox.style.display = 'none';
+            progressContainer.style.display = 'block';
+            progressBar.value = 0;
+
+            let progreso = 0;
+            const intervalo = setInterval(() => {
+                progreso += 20;
+                progressBar.value = progreso;
+                statusText.innerText = `Autenticando y analizando pistas... ${progreso}%`;
+
+                if (progreso >= 100) {
+                    clearInterval(intervalo);
+                    statusText.innerText = '¡Proceso completado con éxito!';
+                    btnStart.disabled = false;
+
+                    // Generar el archivo JSON de configuración descargable directamente en el navegador
+                    const configData = {
+                        email: email,
+                        password: password,
+                        target_url: url
+                    };
+
+                    const blob = new Blob([JSON.stringify(configData, null, 2)], { type: 'application/json' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    const downloadLink = document.getElementById('downloadLink');
+                    downloadLink.href = blobUrl;
+                    downloadLink.download = "hra_config.json";
+                    
+                    downloadBox.style.display = 'block';
+                }
+            }, 400);
         }
     </script>
+
 </body>
 </html>
