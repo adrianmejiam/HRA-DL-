@@ -39,7 +39,7 @@ HTML_TEMPLATE = """
                 <div class="card shadow-sm">
                     <div class="card-header bg-dark text-white text-center py-3">
                         <h3 class="mb-0">HighResAudio Downloader</h3>
-                        <small class="text-muted">Descarga música en alta resolución con formato y metadatos personalizados</small>
+                        <small class="text-muted">Descarga música en alta resolución con metadatos e imágenes</small>
                     </div>
                     <div class="card-body p-4">
                         <div id="alert-container"></div>
@@ -49,14 +49,7 @@ HTML_TEMPLATE = """
                                 <label for="url" class="form-label font-weight-bold">Enlace del Álbum o Pista de HighResAudio:</label>
                                 <input type="url" class="form-control" id="url" name="url" required 
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="format" class="form-label font-weight-bold">Formato de audio:</label>
-                                <select class="form-select" id="format" name="format">
-                                    <option value="flac" selected>FLAC (Sin pérdida - Recomendado)</option>
-                                    <option value="wav">WAV (Sin comprimir)</option>
-                                </select>
+                                <div class="form-text">El proceso puede tardar unos minutos dependiendo del tamaño del álbum.</div>
                             </div>
                             
                             <div id="progress-container" class="mb-3 d-none">
@@ -64,7 +57,7 @@ HTML_TEMPLATE = """
                                 <div class="progress" style="height: 25px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
                                          role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
-                                        Descargando y convirtiendo archivos...
+                                        Descargando y guardando archivos...
                                     </div>
                                 </div>
                             </div>
@@ -101,7 +94,6 @@ HTML_TEMPLATE = """
             e.preventDefault();
             
             const urlInput = document.getElementById('url').value;
-            const formatInput = document.getElementById('format').value;
             const progressContainer = document.getElementById('progress-container');
             const btnContainer = document.getElementById('btn-container');
             const alertContainer = document.getElementById('alert-container');
@@ -116,7 +108,7 @@ HTML_TEMPLATE = """
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: 'url=' + encodeURIComponent(urlInput) + '&format=' + encodeURIComponent(formatInput)
+                    body: 'url=' + encodeURIComponent(urlInput)
                 });
 
                 const data = await response.json();
@@ -160,21 +152,20 @@ def index():
 @app.route("/download", methods=["POST"])
 def download():
     song_url = request.form.get("url")
-    audio_format = request.form.get("format", "flac")
     
     if not song_url:
         return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."})
 
     try:
         process = subprocess.run(
-            ["python", "HRA-DL.py", "--url", song_url, "--format", audio_format],
+            ["python", "HRA-DL.py", "--url", song_url],
             capture_output=True,
             text=True,
             timeout=300
         )
 
         if process.returncode == 0:
-            return jsonify({"success": True, "message": f"¡Descarga completada con éxito en formato {audio_format.upper()}!"})
+            return jsonify({"success": True, "message": "¡Descarga completada con éxito al 100% con metadatos e imágenes!"})
         else:
             error_message = process.stderr.strip() or process.stdout.strip() or "Error desconocido durante la ejecución."
             return jsonify({"success": False, "message": f"Error en el proceso: {error_message}"})
