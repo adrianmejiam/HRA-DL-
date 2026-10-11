@@ -8,6 +8,12 @@ import json
 import time
 import platform
 import traceback
+import argparse
+
+# Configuración de argumentos de línea de comandos
+parser = argparse.ArgumentParser(description="HRA-DL Automatizado")
+parser.add_argument("--url", type=str, help="URL de la pista o álbum en HighResAudio")
+args = parser.parse_args()
 
 # Third party
 import requests
