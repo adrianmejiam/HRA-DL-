@@ -1,7 +1,5 @@
-beautifulsoup4
-tqdm
-requests
-fastapi==0.115.0
-pydantic==2.9.0
-requests==2.32.2
-uvicorn==0.31.0
+flask==3.0.3
+requests==2.31.0
+mutagen==1.47.0
+beautifulsoup4==4.12.3
+gunicorn==21.2.0
