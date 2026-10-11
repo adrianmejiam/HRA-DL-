@@ -9,6 +9,55 @@ import time
 import platform
 import traceback
 import argparse
+import subprocess
+import os
+import imageio_ffmpeg
+
+# ... (código existente donde obtienes la ruta del archivo descargado, ej: downloaded_file_path)
+
+def convert_audio_format(file_path, target_format):
+    """
+    Convierte el archivo de audio descargado al formato deseado (flac o wav) usando ffmpeg.
+    """
+    if not os.path.exists(file_path):
+        return file_path
+
+    base, ext = os.path.splitext(file_path)
+    target_format = target_format.lower()
+    
+    # Si el formato actual ya coincide con el solicitado, no hacemos nada
+    if ext.lstrip('.').lower() == target_format:
+        return file_path
+
+    output_file = f"{base}.{target_format}"
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
+    print(f"Convirtiendo archivo a {target_format.upper()} usando FFmpeg...")
+
+    try:
+        if target_format == "wav":
+            # Comando para convertir FLAC/Lossless a WAV PCM de alta calidad
+            cmd = [ffmpeg_exe, "-y", "-i", file_path, "-vn", output_file]
+        elif target_format == "flac":
+            # Comando para convertir a FLAC
+            cmd = [ffmpeg_exe, "-y", "-i", file_path, "-c:a", "flac", output_file]
+        else:
+            return file_path
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print(f"Conversión exitosa: {output_file}")
+            # Opcional: eliminar el archivo original si deseas conservar solo el convertido
+            # os.remove(file_path)
+            return output_file
+        else:
+            print(f"Error en la conversión con FFmpeg: {result.stderr}")
+            return file_path
+
+    except Exception as e:
+        print(f"Excepción al ejecutar FFmpeg: {str(e)}")
+        return file_path
 
 # Configuración de argumentos de línea de comandos
 parser = argparse.ArgumentParser(description="HRA-DL Automatizado")
