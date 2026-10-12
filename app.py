@@ -223,7 +223,7 @@ def download():
     try:
         # Aumentamos el tiempo límite a 600 segundos (10 minutos) para evitar cortes prematuros en álbumes pesados
         process = subprocess.run(
-            ["python", "HRA-DL.py", "--url", song_url],
+            ["python3", "HRA-DL.py", "--url", song_url],
             capture_output=True,
             text=True,
             timeout=600
