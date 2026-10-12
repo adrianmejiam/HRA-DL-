@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import time
 from flask import Flask, render_template_string, request, jsonify, send_file
 
 app = Flask(__name__)
@@ -32,9 +33,23 @@ HTML_TEMPLATE = """
                                 <label for="url" class="form-label font-weight-bold">Enlace del Álbum o Pista de HighResAudio:</label>
                                 <input type="url" class="form-control" id="url" name="url" required 
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
-                                <div class="form-text">Al finalizar, se generará un archivo ZIP listo para descargar en tu equipo.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="download-path" class="form-label font-weight-bold">Carpeta de destino preferida (Opcional):</label>
+                                <input type="text" class="form-control" id="download-path" name="custom_path" 
+                                       placeholder="Ej: Descargas/MusicaHRA (El navegador usará tu carpeta predeterminada si se deja vacío)">
+                                <div class="form-text">Los archivos se empaquetarán en un ZIP listo para tu navegador.</div>
                             </div>
                             
+                            <!-- Panel de estimaciones -->
+                            <div id="info-panel" class="alert alert-secondary d-none mb-3">
+                                <ul class="mb-0 small">
+                                    <li><strong>Tamaño estimado:</strong> <span id="est-size">Calculando...</span></li>
+                                    <li><strong>Tiempo estimado de espera:</strong> <span id="est-time">Calculando...</span></li>
+                                </ul>
+                            </div>
+
                             <div id="progress-container" class="mb-3 d-none">
                                 <label class="form-label text-primary fw-bold" id="status-text">Descargando y preparando archivos...</label>
                                 <div class="progress" style="height: 25px;">
@@ -61,11 +76,29 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        // Manejo del formulario y descarga del archivo ZIP directamente al navegador
+        // Estimaciones dinámicas basadas en el enlace introducido
+        document.getElementById('url').addEventListener('input', function(e) {
+            const val = e.target.value;
+            const infoPanel = document.getElementById('info-panel');
+            if (val.includes('album')) {
+                document.getElementById('est-size').textContent = 'Aprox. 350 MB - 1.2 GB (FLAC Lossless)';
+                document.getElementById('est-time').textContent = '1 a 3 minutos (dependiendo de la conexión)';
+                infoPanel.classList.remove('d-none');
+            } else if (val.includes('track') || val.includes('title')) {
+                document.getElementById('est-size').textContent = 'Aprox. 35 MB - 120 MB';
+                document.getElementById('est-time').textContent = '15 a 30 segundos';
+                infoPanel.classList.remove('d-none');
+            } else {
+                infoPanel.classList.add('d-none');
+            }
+        });
+
+        // Manejo del formulario y descarga del archivo ZIP
         document.getElementById('download-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const urlInput = document.getElementById('url').value;
+            const customPath = document.getElementById('download-path').value;
             const progressContainer = document.getElementById('progress-container');
             const btnContainer = document.getElementById('btn-container');
             const alertContainer = document.getElementById('alert-container');
@@ -80,7 +113,7 @@ HTML_TEMPLATE = """
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: 'url=' + encodeURIComponent(urlInput)
+                    body: 'url=' + encodeURIComponent(urlInput) + '&custom_path=' + encodeURIComponent(customPath)
                 });
 
                 if (response.ok) {
@@ -101,6 +134,7 @@ HTML_TEMPLATE = """
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>`;
                     document.getElementById('url').value = '';
+                    document.getElementById('info-panel').classList.add('d-none');
                 } else {
                     const data = await response.json();
                     progressContainer.classList.add('d-none');
@@ -133,6 +167,7 @@ def index():
 @app.route("/download", methods=["POST"])
 def download():
     song_url = request.form.get("url")
+    custom_path = request.form.get("custom_path", "").strip()
     
     if not song_url:
         return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."}), 400
@@ -156,6 +191,17 @@ def download():
 
         target_folder = download_dir if os.path.exists(download_dir) and os.listdir(download_dir) else os.getcwd()
         
+        # SOLUCIÓN AL ERROR DE TIMESTAMPS ANTERIORES A 1980:
+        # Actualizamos la fecha de acceso y modificación de todos los archivos encontrados al momento actual
+        current_time = time.time()
+        for root, dirs, files in os.walk(target_folder):
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    os.utime(file_path, (current_time, current_time))
+                except Exception:
+                    pass
+
         zip_filename = "HRA_Download"
         zip_path = shutil.make_archive(zip_filename, 'zip', target_folder)
 
