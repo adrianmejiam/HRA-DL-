@@ -10,7 +10,6 @@ import platform
 import traceback
 import argparse
 import subprocess
-import os
 
 # Configuración de argumentos de línea de comandos
 parser = argparse.ArgumentParser(description="HRA-DL Automatizado")
@@ -46,14 +45,7 @@ def osCommands(x):
             os.system('title HRA-DL (Optimized)')
     else:
         if x == "p":
-            os.system("read -rsp $''")  # <--- Esto es lo que causa el error en 'sh'
-        elif x == "c":
-            os.system('clear')
-        elif x == "t":
-            sys.stdout.write("\x1b]2;HRA-DL (Optimized)\x07")
-    else:
-        if x == "p":
-            os.system("read -rsp $''")
+            os.system("read -rsp $''")  # Pausa segura para entornos Unix
         elif x == "c":
             os.system('clear')
         elif x == "t":
