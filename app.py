@@ -17,7 +17,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HRA-DL Web Downloader</title>
+    <title>HRA-DL Web Downloader - Máxima Fidelidad</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .brand-header {
@@ -58,7 +58,7 @@ HTML_TEMPLATE = """
                                  alt="Hi-Res Audio Logo" class="hires-logo">
                             <h2 class="mb-0 fw-bold tracking-wide text-warning">HIGH RES AUDIO</h2>
                         </div>
-                        <p class="text-light small mt-2 mb-0 opacity-75">Sistema Automatizado de Descarga Directa en Máxima Fidelidad</p>
+                        <p class="text-light small mt-2 mb-0 opacity-75">Descarga Directa Lossless en Máxima Fidelidad (Sin Pérdida)</p>
                     </div>
                     <div class="card-body p-4">
                         <div id="alert-container"></div>
@@ -70,7 +70,6 @@ HTML_TEMPLATE = """
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
                             </div>
 
-                            <!-- Campo opcional para Cookie / Token de autenticación -->
                             <div class="mb-3">
                                 <label for="cookie" class="form-label small fw-bold text-muted">Cookie de Sesión / Token (Opcional - Para cuentas de pago):</label>
                                 <input type="text" class="form-control form-control-sm" id="cookie" name="cookie" 
@@ -87,7 +86,7 @@ HTML_TEMPLATE = """
 
                             <!-- Cuadro de la interfaz del script en tiempo real -->
                             <div id="progress-container" class="mb-3 d-none">
-                                <label class="text-primary fw-bold mb-1">Consola de Descarga (Progreso individual):</label>
+                                <label class="text-primary fw-bold mb-1">Consola de Descarga Lossless:</label>
                                 <div id="console-output" class="console-box mb-2">Inicializando...</div>
                                 <div class="progress" style="height: 15px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" 
@@ -96,7 +95,7 @@ HTML_TEMPLATE = """
                             </div>
 
                             <div class="d-grid" id="btn-container">
-                                <button type="submit" id="submit-btn" class="btn btn-warning btn-lg fw-bold text-dark shadow-sm">Iniciar Descarga Segura</button>
+                                <button type="submit" id="submit-btn" class="btn btn-warning btn-lg fw-bold text-dark shadow-sm">Iniciar Descarga en Máxima Fidelidad</button>
                             </div>
                         </form>
                     </div>
@@ -115,11 +114,11 @@ HTML_TEMPLATE = """
             const val = e.target.value;
             const infoPanel = document.getElementById('info-panel');
             if (val.includes('album')) {
-                document.getElementById('est-size').textContent = 'Aprox. 350 MB - 1.2 GB (Lossless)';
+                document.getElementById('est-size').textContent = 'Aprox. 350 MB - 1.5 GB (FLAC Lossless)';
                 document.getElementById('est-time').textContent = '1 a 3 minutos';
                 infoPanel.classList.remove('d-none');
             } else if (val.includes('track') || val.includes('title')) {
-                document.getElementById('est-size').textContent = 'Aprox. 35 MB - 120 MB';
+                document.getElementById('est-size').textContent = 'Aprox. 35 MB - 150 MB (FLAC Lossless)';
                 document.getElementById('est-time').textContent = '15 a 30 segundos';
                 infoPanel.classList.remove('d-none');
             } else {
@@ -138,7 +137,7 @@ HTML_TEMPLATE = """
             const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Se estableció conexión con el servidor.\\n';
+            consoleBox.innerHTML = '>> Estableciendo conexión segura con el servidor...\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
@@ -165,7 +164,7 @@ HTML_TEMPLATE = """
                         btnContainer.classList.remove('d-none');
                         alertContainer.innerHTML = `
                             <div class="alert alert-success alert-dismissible fade show" role="alert">
-                                ¡Descarga completada con éxito y enviada a tu navegador!
+                                ¡Descarga Lossless completada y empaquetada con éxito!
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>`;
                         document.getElementById('url').value = '';
@@ -181,7 +180,7 @@ HTML_TEMPLATE = """
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>`;
                     } else {
-                        consoleBox.textContent += event.data + "\\n";
+                        consoleBox.textContent += event.data + "\n";
                         consoleBox.scrollTop = consoleBox.scrollHeight;
                     }
                 };
@@ -241,24 +240,22 @@ def run_download_process(session_id, song_url, cookie_data):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         script_path = os.path.join(base_dir, "HRA-DL.py")
 
-        # Preparar variables de entorno para el proceso
         env = os.environ.copy()
         if cookie_data:
-            # Opción A: Pasar la cookie como variable de entorno
             env["HRA_COOKIE"] = cookie_data
-            
-            # Opción B: Crear un archivo temporal cookies.txt en el directorio de trabajo por si el script lo busca ahí
             cookie_file_path = os.path.join(base_dir, "cookies.txt")
             with open(cookie_file_path, "w", encoding="utf-8") as f:
                 f.write(cookie_data)
 
+        # Ejecutamos el script pasando la carpeta de la sesión como directorio de trabajo (cwd)
+        # para que los archivos descargados queden exclusivamente dentro de esta carpeta aislada.
         process = subprocess.Popen(
             ["python3", script_path, "--url", song_url],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=base_dir,
+            cwd=download_dir,
             env=env
         )
 
@@ -273,7 +270,7 @@ def run_download_process(session_id, song_url, cookie_data):
             download_logs[session_id].append(f"[ERROR] El script HRA-DL.py finalizó con código de salida {process.returncode}.")
             return
 
-        # Filtro interno estricto (solo FLAC, JPG, JPEG, PNG)
+        # Filtro estricto sin pérdida: Mantiene exclusivamente audios FLAC y recursos gráficos originales (portadas JPG/PNG)
         allowed_extensions = ('.flac', '.jpg', '.jpeg', '.png')
         for root, dirs, files in os.walk(download_dir):
             for file in files:
@@ -283,6 +280,7 @@ def run_download_process(session_id, song_url, cookie_data):
                     except Exception:
                         pass
 
+        # Normalización de timestamps para evitar el error de compresión ZIP en sistemas Linux
         current_time = time.time()
         for root, dirs, files in os.walk(download_dir):
             for file in files:
@@ -292,6 +290,7 @@ def run_download_process(session_id, song_url, cookie_data):
                 except Exception:
                     pass
 
+        # Crear archivo ZIP final optimizado con el contenido lossless de la sesión
         zip_path = os.path.join(os.getcwd(), f"HRA_Download_{session_id}")
         shutil.make_archive(zip_path, 'zip', download_dir)
         download_logs[session_id].append("[DONE]")
@@ -351,9 +350,9 @@ def get_zip(session_id):
                 print(f"Error al limpiar recursos de sesión {session_id}: {e}")
             return response
 
-        return send_file(zip_filename, as_attachment=True, download_name="Musica_HRA.zip")
+        return send_file(zip_filename, as_attachment=True, download_name="Album_HiRes_Lossless.zip")
         
-    return jsonify({"success": False, "message": "Archivo no encontrado."}), 404
+    return jsonify({"success": False, "message": "Archivo ZIP no encontrado."}), 404
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
