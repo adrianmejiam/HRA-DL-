@@ -52,30 +52,61 @@ def osCommands(x):
             sys.stdout.write("\x1b]2;HRA-DL (Optimized)\x07")
 
 def login(email, pwd):
-    r = session.get(
-        f'https://streaming.highresaudio.com:8182/vault3/user/login?password={pwd}&username={email}'
-    )
-    if r.status_code == 200 and "has_subscription" in r.json():
-        print("Signed in successfully.\n")
-        return r.text
-    else:
-        print("Login failed or no subscription.")
+    url = f'https://streaming.highresaudio.com:8182/vault3/user/login?password={pwd}&username={email}'
+    try:
+        r = session.get(url, timeout=15)
+        
+        # Intentar parsear el JSON de respuesta incluso si el código no es 200
+        try:
+            data = r.json()
+        except Exception:
+            data = {"raw_text": r.text}
+
+        if r.status_code == 200 and "has_subscription" in data:
+            print("Signed in successfully.\n")
+            return r.text
+        else:
+            print(f"\n[ERROR DE LOGIN] Código HTTP: {r.status_code}")
+            print(f"Respuesta del servidor: {json.dumps(data, indent=2, ensure_ascii=False)}")
+            osCommands('p')
+            sys.exit()
+            
+    except requests.exceptions.RequestException as e:
+        print(f"\n[ERROR DE RED] No se pudo conectar al servidor de autenticación: {e}")
         osCommands('p')
         sys.exit()
-
-def fetchAlbumId(url):
-    soup = BeautifulSoup(session.get(url).text, "html.parser")
-    return soup.find(attrs={"data-id": True})['data-id']
 
 def fetchMetadata(albumId, userData):
-    r = session.get(
-        f'https://streaming.highresaudio.com:8182/vault3/vault/album/?album_id={albumId}&userData={userData}'
-    )
-    if r.status_code != 200:
-        print("Failed to fetch metadata.")
+    url = f'https://streaming.highresaudio.com:8182/vault3/vault/album/?album_id={albumId}&userData={userData}'
+    try:
+        r = session.get(url, timeout=15)
+        
+        # Intentar extraer la respuesta en JSON para diagnóstico
+        try:
+            data = r.json()
+        except Exception:
+            data = {"raw_text": r.text}
+
+        if r.status_code != 200:
+            print(f"\n[ERROR DE METADATA] El servidor respondió con el código HTTP {r.status_code}")
+            print(f"URL consultada: {url}")
+            print(f"Detalle del servidor: {json.dumps(data, indent=2, ensure_ascii=False)}")
+            osCommands('p')
+            sys.exit()
+            
+        # Verificar si la estructura interna del JSON contiene los resultados esperados
+        if 'data' not in data or 'results' not in data['data']:
+            print(f"\n[ERROR DE METADATA] La estructura de la respuesta JSON es inesperada:")
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            osCommands('p')
+            sys.exit()
+            
+        return data
+
+    except requests.exceptions.RequestException as e:
+        print(f"\n[ERROR DE RED] Fallo al solicitar metadatos del álbum: {e}")
         osCommands('p')
         sys.exit()
-    return r.json()
 
 def dirSetup(path):
     os.makedirs(path, exist_ok=True)
