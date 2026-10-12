@@ -12,6 +12,7 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "clave-secreta-por-defecto")
 
 download_logs = {}
 session_metadata = {}
+data_lock = threading.Lock()
 
 def background_cleanup_janitor():
     while True:
@@ -37,7 +38,6 @@ def index():
     return render_template("index.html")
 
 def verify_hra_credentials(email, password):
-    """Verifica las credenciales contra la API de HIGHRESAUDIO antes de descargar."""
     try:
         url = f"https://streaming.highresaudio.com:8182/vault3/user/login?password={password}&username={email}"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0"}
@@ -52,13 +52,14 @@ def verify_hra_credentials(email, password):
         return False, f"Error al conectar con el servidor de autenticación: {str(e)}"
 
 def run_download_process(session_id, song_url, email, password, cookie_data):
-    download_logs[session_id] = []
-    session_metadata[session_id] = {
-        "url": song_url,
-        "status": "Procesando...",
-        "last_log": "Iniciando proceso de descarga lossless...",
-        "ready_to_download": False
-    }
+    with data_lock:
+        download_logs[session_id] = []
+        session_metadata[session_id] = {
+            "url": song_url,
+            "status": "Procesando...",
+            "last_log": "Iniciando proceso de descarga lossless...",
+            "ready_to_download": False
+        }
     
     download_dir = os.path.join(os.getcwd(), f"downloads_{session_id}")
     if os.path.exists(download_dir):
@@ -97,16 +98,18 @@ def run_download_process(session_id, song_url, email, password, cookie_data):
         for line in process.stdout:
             clean_line = line.strip()
             if clean_line:
-                download_logs[session_id].append(clean_line)
-                session_metadata[session_id]["last_log"] = clean_line
+                with data_lock:
+                    download_logs[session_id].append(clean_line)
+                    session_metadata[session_id]["last_log"] = clean_line
 
         process.wait()
 
         if process.returncode != 0:
             error_msg = f"[ERROR] HRA-DL.py finalizó con código de salida {process.returncode}."
-            download_logs[session_id].append(error_msg)
-            session_metadata[session_id]["status"] = "Error"
-            session_metadata[session_id]["last_log"] = error_msg
+            with data_lock:
+                download_logs[session_id].append(error_msg)
+                session_metadata[session_id]["status"] = "Error"
+                session_metadata[session_id]["last_log"] = error_msg
             return
 
         allowed_extensions = ('.flac', '.jpg', '.jpeg', '.png')
@@ -130,16 +133,18 @@ def run_download_process(session_id, song_url, email, password, cookie_data):
         zip_path = os.path.join(os.getcwd(), f"HRA_Download_{session_id}")
         shutil.make_archive(zip_path, 'zip', download_dir)
         
-        download_logs[session_id].append("[DONE]")
-        session_metadata[session_id]["status"] = "Completado"
-        session_metadata[session_id]["last_log"] = "Descarga Lossless finalizada con éxito."
-        session_metadata[session_id]["ready_to_download"] = True
+        with data_lock:
+            download_logs[session_id].append("[DONE]")
+            session_metadata[session_id]["status"] = "Completado"
+            session_metadata[session_id]["last_log"] = "Descarga Lossless finalizada con éxito."
+            session_metadata[session_id]["ready_to_download"] = True
 
     except Exception as e:
         err_str = f"[ERROR] Ocurrió un error inesperado en el servidor: {str(e)}"
-        download_logs[session_id].append(err_str)
-        session_metadata[session_id]["status"] = "Error"
-        session_metadata[session_id]["last_log"] = err_str
+        with data_lock:
+            download_logs[session_id].append(err_str)
+            session_metadata[session_id]["status"] = "Error"
+            session_metadata[session_id]["last_log"] = err_str
 
 @app.route("/start-download", methods=["POST"])
 def start_download():
@@ -151,7 +156,6 @@ def start_download():
     if not song_url:
         return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."}), 400
 
-    # Validar credenciales antes de iniciar si el usuario las ingresó
     if email and password:
         is_valid, msg = verify_hra_credentials(email, password)
         if not is_valid:
@@ -167,17 +171,18 @@ def start_download():
 
 @app.route("/api/sessions")
 def get_sessions():
-    sessions_list = []
-    for sid, meta in session_metadata.items():
-        zip_exists = os.path.exists(f"HRA_Download_{sid}.zip")
-        sessions_list.append({
-            "session_id": sid,
-            "url": meta["url"],
-            "status": meta["status"],
-            "last_log": meta["last_log"],
-            "ready_to_download": meta["ready_to_download"] and zip_exists
-        })
-    sessions_list.reverse()
+    with data_lock:
+        sessions_list = []
+        for sid, meta in session_metadata.items():
+            zip_exists = os.path.exists(f"HRA_Download_{sid}.zip")
+            sessions_list.append({
+                "session_id": sid,
+                "url": meta["url"],
+                "status": meta["status"],
+                "last_log": meta["last_log"],
+                "ready_to_download": meta["ready_to_download"] and zip_exists
+            })
+        sessions_list.reverse()
     return jsonify({"sessions": sessions_list})
 
 @app.route("/stream-logs/<session_id>")
@@ -185,14 +190,15 @@ def stream_logs(session_id):
     def generate():
         index = 0
         while True:
-            if session_id in download_logs:
-                logs = download_logs[session_id]
-                while index < len(logs):
-                    log_line = logs[index]
-                    yield f"data: {log_line}\n\n"
-                    if log_line == "[DONE]" or log_line.startswith("[ERROR]"):
-                        return
-                    index += 1
+            with data_lock:
+                logs = list(download_logs.get(session_id, []))
+            
+            while index < len(logs):
+                log_line = logs[index]
+                yield f"data: {log_line}\n\n"
+                if log_line == "[DONE]" or log_line.startswith("[ERROR]"):
+                    return
+                index += 1
             time.sleep(0.5)
 
     return Response(generate(), mimetype="text/event-stream")
@@ -210,10 +216,11 @@ def get_zip(session_id):
                     os.remove(zip_filename)
                 if os.path.exists(download_dir):
                     shutil.rmtree(download_dir, ignore_errors=True)
-                if session_id in download_logs:
-                    del download_logs[session_id]
-                if session_id in session_metadata:
-                    del session_metadata[session_id]
+                with data_lock:
+                    if session_id in download_logs:
+                        del download_logs[session_id]
+                    if session_id in session_metadata:
+                        del session_metadata[session_id]
             except Exception as e:
                 print(f"Error al limpiar recursos de sesión {session_id}: {e}")
             return response
