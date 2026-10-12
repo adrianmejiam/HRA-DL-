@@ -16,8 +16,20 @@ HTML_TEMPLATE = """
     <title>HRA-DL Web Downloader</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        .brand-header {
+            background: linear-gradient(135deg, #121212 0%, #2c2c2c 100%);
+            border-bottom: 3px solid #d4af37;
+        }
+        .hires-logo {
+            width: 45px;
+            height: 45px;
+            object-fit: contain;
+            margin-right: 12px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
         .console-box {
-            background-color: #1e1e1e;
+            background-color: #121212;
             color: #00ff66;
             font-family: monospace;
             font-size: 0.85rem;
@@ -33,26 +45,29 @@ HTML_TEMPLATE = """
     <div class="container py-5 my-auto">
         <div class="row justify-content-center">
             <div class="col-md-8">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-dark text-white text-center py-3">
-                        <h3 class="mb-0">HighResAudio Downloader</h3>
-                        <small class="text-muted">Descarga música en alta resolución directamente a tu dispositivo</small>
+                <div class="card shadow-lg border-0">
+                    <div class="card-header brand-header text-white text-center py-4">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <img src="https://thumb.wikimedia.org/wikipedia/en/thumb/d/d1/Hi-Res_Audio_%28logo%29.svg/1280px-Hi-Res_Audio_%28logo%29.svg.png" 
+                                 alt="Hi-Res Audio Logo" class="hires-logo">
+                            <h2 class="mb-0 fw-bold tracking-wide text-warning">HIGH RES AUDIO</h2>
+                        </div>
+                        <p class="text-light small mt-2 mb-0 opacity-75">Sistema Automatizado de Descarga Directa en Máxima Fidelidad</p>
                     </div>
                     <div class="card-body p-4">
                         <div id="alert-container"></div>
 
                         <form id="download-form">
                             <div class="mb-3">
-                                <label for="url" class="form-label font-weight-bold">Enlace del Álbum o Pista de HighResAudio:</label>
-                                <input type="url" class="form-control" id="url" name="url" required 
+                                <label for="url" class="form-label fw-bold">Enlace del Álbum o Pista de HighResAudio:</label>
+                                <input type="url" class="form-control form-control-lg" id="url" name="url" required 
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
                             </div>
 
                             <div class="mb-3">
-                                <label for="download-path" class="form-label font-weight-bold">Carpeta de destino preferida (Opcional):</label>
+                                <label for="download-path" class="form-label fw-bold">Carpeta de destino preferida (Opcional):</label>
                                 <input type="text" class="form-control" id="download-path" name="custom_path" 
                                        placeholder="Ej: Descargas/MusicaHRA">
-                                <div class="form-text">Se filtrarán solo archivos FLAC, JPG y PNG limpios en el ZIP final.</div>
                             </div>
                             
                             <!-- Panel de estimaciones -->
@@ -65,16 +80,17 @@ HTML_TEMPLATE = """
 
                             <!-- Cuadro de avance individual en tiempo real -->
                             <div id="progress-container" class="mb-3 d-none">
-                                <label class="form-label text-primary fw-bold">Avance individual de canciones y recursos:</label>
-                                <div id="console-output" class="console-box mb-2">Iniciando conexión con HRA-DL...</div>
+                                <label class="text-primary fw-bold mb-1">Progreso y estado de la conexión:</label>
+                                <div id="console-output" class="console-box mb-2">Estableciendo canal seguro con el servidor...</div>
                                 <div class="progress" style="height: 15px;">
-                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" 
                                          role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
                                 </div>
+                                <small class="text-muted d-block mt-1 text-center" id="stability-note">Modo de alta estabilidad activado (evitando desconexiones)...</small>
                             </div>
 
                             <div class="d-grid" id="btn-container">
-                                <button type="submit" id="submit-btn" class="btn btn-primary btn-lg">Iniciar Descarga</button>
+                                <button type="submit" id="submit-btn" class="btn btn-warning btn-lg fw-bold text-dark shadow-sm">Iniciar Descarga Segura</button>
                             </div>
                         </form>
                     </div>
@@ -93,7 +109,7 @@ HTML_TEMPLATE = """
             const val = e.target.value;
             const infoPanel = document.getElementById('info-panel');
             if (val.includes('album')) {
-                document.getElementById('est-size').textContent = 'Aprox. 350 MB - 1.2 GB (FLAC Lossless)';
+                document.getElementById('est-size').textContent = 'Aprox. 350 MB - 1.2 GB (Lossless)';
                 document.getElementById('est-time').textContent = '1 a 3 minutos';
                 infoPanel.classList.remove('d-none');
             } else if (val.includes('track') || val.includes('title')) {
@@ -104,6 +120,20 @@ HTML_TEMPLATE = """
                 infoPanel.classList.add('d-none');
             }
         });
+
+        // Función con reintentos automáticos para evitar desconexiones de red
+        async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    return response;
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    document.getElementById('console-output').innerHTML += `>> Reconectando con el servidor (intento ${i + 2})...\\n`;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
 
         document.getElementById('download-form').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -116,26 +146,26 @@ HTML_TEMPLATE = """
             const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Conectando y analizando enlace...\\n';
+            consoleBox.innerHTML = '>> Canal establecido. Procesando enlace en segundo plano...\\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
             try {
-                const response = await fetch('/download', {
+                const response = await fetchWithRetry('/download', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
                     body: 'url=' + encodeURIComponent(urlInput) + '&custom_path=' + encodeURIComponent(customPath)
-                });
+                }, 3, 3000);
 
                 if (response.ok) {
-                    consoleBox.innerHTML += '>> ¡Paquete ZIP generado con éxito! Descargando en navegador...\\n';
+                    consoleBox.innerHTML += '>> ¡Paquete ZIP listo! Transfiriendo archivo al navegador...\\n';
                     const blob = await response.blob();
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = downloadUrl;
-                    a.download = "Musica_HRA_Limpia.zip";
+                    a.download = "Musica_HRA.zip";
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
@@ -144,7 +174,7 @@ HTML_TEMPLATE = """
                     btnContainer.classList.remove('d-none');
                     alertContainer.innerHTML = `
                         <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            ¡Descarga completada y filtrada (solo FLAC, JPG, PNG) con éxito!
+                            ¡Descarga completada con éxito en tu navegador!
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>`;
                     document.getElementById('url').value = '';
@@ -164,7 +194,7 @@ HTML_TEMPLATE = """
                 btnContainer.classList.remove('d-none');
                 alertContainer.innerHTML = `
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        Ocurrió un error de red o de comunicación con el servidor.
+                        Error de conexión persistente con el servidor. Comprueba tu enlace o conexión de red.
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>`;
             }
@@ -191,11 +221,12 @@ def download():
     os.makedirs(download_dir, exist_ok=True)
 
     try:
+        # Aumentamos el tiempo límite a 600 segundos (10 minutos) para evitar cortes prematuros en álbumes pesados
         process = subprocess.run(
             ["python", "HRA-DL.py", "--url", song_url],
             capture_output=True,
             text=True,
-            timeout=300
+            timeout=600
         )
 
         if process.returncode != 0:
@@ -204,7 +235,7 @@ def download():
 
         target_folder = download_dir if os.path.exists(download_dir) and os.listdir(download_dir) else os.getcwd()
         
-        # FILTRO ESTRICTO: ELIMINAR CUALQUIER ARCHIVO QUE NO SEA FLAC, JPG, JPEG O PNG
+        # Filtro estricto interno sin mensajes visibles en pantalla
         allowed_extensions = ('.flac', '.jpg', '.jpeg', '.png')
         for root, dirs, files in os.walk(target_folder):
             for file in files:
@@ -214,7 +245,7 @@ def download():
                     except Exception:
                         pass
 
-        # Normalizar fechas de timestamps para evitar el error anterior de 1980 en ZIP
+        # Normalización de fechas para evitar el error ZIP de timestamps anteriores a 1980
         current_time = time.time()
         for root, dirs, files in os.walk(target_folder):
             for file in files:
@@ -227,10 +258,10 @@ def download():
         zip_filename = "HRA_Download"
         zip_path = shutil.make_archive(zip_filename, 'zip', target_folder)
 
-        return send_file(zip_path, as_attachment=True, download_name="Musica_HRA_Pura.zip")
+        return send_file(zip_path, as_attachment=True, download_name="Musica_HRA.zip")
 
     except subprocess.TimeoutExpired:
-        return jsonify({"success": False, "message": "La descarga ha tardado más de 5 minutos y se ha interrumpido."}), 500
+        return jsonify({"success": False, "message": "La descarga ha superado el tiempo límite de 10 minutos y se ha detenido."}), 500
     except Exception as e:
         return jsonify({"success": False, "message": f"Ocurrió un error inesperado: {str(e)}"}), 500
 
