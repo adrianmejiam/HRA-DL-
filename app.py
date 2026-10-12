@@ -190,7 +190,7 @@ HTML_TEMPLATE = """
             const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Conectando con HIGHRESAUDIO.com...\n';
+            consoleBox.innerHTML = '>> Conectando con HIGHRESAUDIO.com...\\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
@@ -238,7 +238,7 @@ HTML_TEMPLATE = """
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>`;
                     } else {
-                        consoleBox.textContent += event.data + "\n";
+                        consoleBox.textContent += event.data + "\\n";
                         consoleBox.scrollTop = consoleBox.scrollHeight;
                     }
                 };
@@ -354,7 +354,6 @@ def run_download_process(session_id, song_url, email, password, cookie_data):
 
         env = os.environ.copy()
         
-        # Inyectar credenciales y datos de sesión al entorno del proceso
         if email:
             env["HRA_USERNAME"] = email
             env["HRA_EMAIL"] = email
@@ -367,10 +366,14 @@ def run_download_process(session_id, song_url, email, password, cookie_data):
             with open(cookie_file_path, "w", encoding="utf-8") as f:
                 f.write(cookie_data)
 
-        # Construcción del comando pasando los argumentos si el script los soporta
         cmd = ["python3", script_path, "--url", song_url]
         if email and password:
             cmd.extend(["-u", email, "-p", password])
 
         process = subprocess.Popen(
-       
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            cwd=download
