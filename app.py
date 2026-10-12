@@ -3,7 +3,7 @@ import shutil
 import subprocess
 import time
 import threading
-from flask import Flask, render_template_string, request, jsonify, send_file, Response
+from flask import Flask, render_template_string, request, jsonify, send_file, Response, after_this_request
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "clave-secreta-por-defecto")
@@ -135,7 +135,6 @@ HTML_TEMPLATE = """
             btnContainer.classList.add('d-none');
 
             try {
-                // Iniciamos la petición de descarga en el servidor
                 const response = await fetch('/start-download', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -148,14 +147,11 @@ HTML_TEMPLATE = """
                 }
 
                 const sessionId = data.session_id;
-
-                // Conectamos al canal de eventos en tiempo real para leer la consola del script
                 const eventSource = new EventSource(`/stream-logs/${sessionId}`);
                 
                 eventSource.onmessage = function(event) {
                     if (event.data === "[DONE]") {
                         eventSource.close();
-                        // Descargar el archivo ZIP generado automáticamente
                         window.location.href = `/get-zip/${sessionId}`;
                         progressContainer.classList.add('d-none');
                         btnContainer.classList.remove('d-none');
@@ -200,6 +196,29 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# Hilo en segundo plano para limpiar archivos huérfanos o abandonados (cada 30 min)
+def background_cleanup_janitor():
+    while True:
+        time.sleep(1800)
+        now = time.time()
+        try:
+            for item in os.listdir(os.getcwd()):
+                item_path = os.path.join(os.getcwd(), item)
+                # Borrar ZIPs de más de 30 minutos
+                if item.startswith("HRA_Download_") and item.endswith(".zip"):
+                    if os.path.isfile(item_path) and (now - os.path.getmtime(item_path) > 1800):
+                        os.remove(item_path)
+                # Borrar carpetas temporales de más de 30 minutos
+                elif item.startswith("downloads_") and os.path.isdir(item_path):
+                    if now - os.path.getmtime(item_path) > 1800:
+                        shutil.rmtree(item_path, ignore_errors=True)
+        except Exception:
+            pass
+
+# Iniciar el hilo de limpieza en segundo plano como daemon
+janitor_thread = threading.Thread(target=background_cleanup_janitor, daemon=True)
+janitor_thread.start()
+
 @app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
@@ -216,7 +235,6 @@ def run_download_process(session_id, song_url):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         script_path = os.path.join(base_dir, "HRA-DL.py")
 
-        # Ejecutamos el script leyendo su salida estándar línea por línea en tiempo real
         process = subprocess.Popen(
             ["python3", script_path, "--url", song_url],
             stdout=subprocess.PIPE,
@@ -273,7 +291,6 @@ def start_download():
 
     session_id = str(time.time_ns())
     
-    # Lanzar el proceso de descarga en un hilo independiente en segundo plano
     thread = threading.Thread(target=run_download_process, args=(session_id, song_url))
     thread.daemon = True
     thread.start()
@@ -300,8 +317,25 @@ def stream_logs(session_id):
 @app.route("/get-zip/<session_id>")
 def get_zip(session_id):
     zip_filename = f"HRA_Download_{session_id}.zip"
+    download_dir = os.path.join(os.getcwd(), f"downloads_{session_id}")
+    
     if os.path.exists(zip_filename):
+        # Limpieza automática inmediata justo después de enviar el archivo al usuario
+        @after_this_request
+        def cleanup_session_files(response):
+            try:
+                if os.path.exists(zip_filename):
+                    os.remove(zip_filename)
+                if os.path.exists(download_dir):
+                    shutil.rmtree(download_dir, ignore_errors=True)
+                if session_id in download_logs:
+                    del download_logs[session_id]
+            except Exception as e:
+                print(f"Error al limpiar recursos de sesión {session_id}: {e}")
+            return response
+
         return send_file(zip_filename, as_attachment=True, download_name="Musica_HRA.zip")
+        
     return jsonify({"success": False, "message": "Archivo no encontrado."}), 404
 
 if __name__ == "__main__":
