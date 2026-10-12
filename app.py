@@ -69,6 +69,13 @@ HTML_TEMPLATE = """
                                 <input type="url" class="form-control form-control-lg" id="url" name="url" required 
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
                             </div>
+
+                            <!-- Campo opcional para Cookie / Token de autenticación -->
+                            <div class="mb-3">
+                                <label for="cookie" class="form-label small fw-bold text-muted">Cookie de Sesión / Token (Opcional - Para cuentas de pago):</label>
+                                <input type="text" class="form-control form-control-sm" id="cookie" name="cookie" 
+                                       placeholder="Pega aquí tu cookie de sesión si el álbum requiere autenticación">
+                            </div>
                             
                             <!-- Panel de estimaciones -->
                             <div id="info-panel" class="alert alert-secondary d-none mb-3">
@@ -124,6 +131,7 @@ HTML_TEMPLATE = """
             e.preventDefault();
             
             const urlInput = document.getElementById('url').value;
+            const cookieInput = document.getElementById('cookie').value;
             const progressContainer = document.getElementById('progress-container');
             const btnContainer = document.getElementById('btn-container');
             const alertContainer = document.getElementById('alert-container');
@@ -138,7 +146,7 @@ HTML_TEMPLATE = """
                 const response = await fetch('/start-download', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'url=' + encodeURIComponent(urlInput)
+                    body: 'url=' + encodeURIComponent(urlInput) + '&cookie=' + encodeURIComponent(cookieInput)
                 });
 
                 const data = await response.json();
@@ -161,6 +169,7 @@ HTML_TEMPLATE = """
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>`;
                         document.getElementById('url').value = '';
+                        document.getElementById('cookie').value = '';
                         document.getElementById('info-panel').classList.add('d-none');
                     } else if (event.data.startsWith("[ERROR]")) {
                         eventSource.close();
@@ -204,18 +213,15 @@ def background_cleanup_janitor():
         try:
             for item in os.listdir(os.getcwd()):
                 item_path = os.path.join(os.getcwd(), item)
-                # Borrar ZIPs de más de 30 minutos
                 if item.startswith("HRA_Download_") and item.endswith(".zip"):
                     if os.path.isfile(item_path) and (now - os.path.getmtime(item_path) > 1800):
                         os.remove(item_path)
-                # Borrar carpetas temporales de más de 30 minutos
                 elif item.startswith("downloads_") and os.path.isdir(item_path):
                     if now - os.path.getmtime(item_path) > 1800:
                         shutil.rmtree(item_path, ignore_errors=True)
         except Exception:
             pass
 
-# Iniciar el hilo de limpieza en segundo plano como daemon
 janitor_thread = threading.Thread(target=background_cleanup_janitor, daemon=True)
 janitor_thread.start()
 
@@ -223,7 +229,7 @@ janitor_thread.start()
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-def run_download_process(session_id, song_url):
+def run_download_process(session_id, song_url, cookie_data):
     download_logs[session_id] = []
     
     download_dir = os.path.join(os.getcwd(), f"downloads_{session_id}")
@@ -235,13 +241,25 @@ def run_download_process(session_id, song_url):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         script_path = os.path.join(base_dir, "HRA-DL.py")
 
+        # Preparar variables de entorno para el proceso
+        env = os.environ.copy()
+        if cookie_data:
+            # Opción A: Pasar la cookie como variable de entorno
+            env["HRA_COOKIE"] = cookie_data
+            
+            # Opción B: Crear un archivo temporal cookies.txt en el directorio de trabajo por si el script lo busca ahí
+            cookie_file_path = os.path.join(base_dir, "cookies.txt")
+            with open(cookie_file_path, "w", encoding="utf-8") as f:
+                f.write(cookie_data)
+
         process = subprocess.Popen(
             ["python3", script_path, "--url", song_url],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=download_dir
+            cwd=base_dir,
+            env=env
         )
 
         for line in process.stdout:
@@ -252,7 +270,7 @@ def run_download_process(session_id, song_url):
         process.wait()
 
         if process.returncode != 0:
-            download_logs[session_id].append("[ERROR] Error en el proceso de descarga del script.")
+            download_logs[session_id].append(f"[ERROR] El script HRA-DL.py finalizó con código de salida {process.returncode}.")
             return
 
         # Filtro interno estricto (solo FLAC, JPG, JPEG, PNG)
@@ -265,7 +283,6 @@ def run_download_process(session_id, song_url):
                     except Exception:
                         pass
 
-        # Normalización de timestamps para evitar el error de ZIP antes de 1980 en Linux
         current_time = time.time()
         for root, dirs, files in os.walk(download_dir):
             for file in files:
@@ -275,23 +292,24 @@ def run_download_process(session_id, song_url):
                 except Exception:
                     pass
 
-        # Crear archivo ZIP final de la sesión
         zip_path = os.path.join(os.getcwd(), f"HRA_Download_{session_id}")
         shutil.make_archive(zip_path, 'zip', download_dir)
         download_logs[session_id].append("[DONE]")
 
     except Exception as e:
-        download_logs[session_id].append(f"[ERROR] Ocurrió un error inesperado: {str(e)}")
+        download_logs[session_id].append(f"[ERROR] Ocurrió un error inesperado en el servidor: {str(e)}")
 
 @app.route("/start-download", methods=["POST"])
 def start_download():
     song_url = request.form.get("url")
+    cookie_data = request.form.get("cookie", "")
+    
     if not song_url:
         return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."}), 400
 
     session_id = str(time.time_ns())
     
-    thread = threading.Thread(target=run_download_process, args=(session_id, song_url))
+    thread = threading.Thread(target=run_download_process, args=(session_id, song_url, cookie_data))
     thread.daemon = True
     thread.start()
 
@@ -320,7 +338,6 @@ def get_zip(session_id):
     download_dir = os.path.join(os.getcwd(), f"downloads_{session_id}")
     
     if os.path.exists(zip_filename):
-        # Limpieza automática inmediata justo después de enviar el archivo al usuario
         @after_this_request
         def cleanup_session_files(response):
             try:
