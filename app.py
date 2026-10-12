@@ -2,10 +2,14 @@ import os
 import shutil
 import subprocess
 import time
-from flask import Flask, render_template_string, request, jsonify, send_file
+import threading
+from flask import Flask, render_template_string, request, jsonify, send_file, Response
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "clave-secreta-por-defecto")
+
+# Diccionario global temporal para almacenar los logs de descarga por sesión
+download_logs = {}
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -33,11 +37,13 @@ HTML_TEMPLATE = """
             color: #00ff66;
             font-family: monospace;
             font-size: 0.85rem;
-            max-height: 180px;
+            height: 200px;
             overflow-y: auto;
             border-radius: 6px;
             padding: 10px;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+            white-space: pre-wrap;
+            word-break: break-all;
         }
     </style>
 </head>
@@ -63,12 +69,6 @@ HTML_TEMPLATE = """
                                 <input type="url" class="form-control form-control-lg" id="url" name="url" required 
                                        placeholder="https://www.highresaudio.com/es/album/artist/name-album">
                             </div>
-
-                            <div class="mb-3">
-                                <label for="download-path" class="form-label fw-bold">Carpeta de destino preferida (Opcional):</label>
-                                <input type="text" class="form-control" id="download-path" name="custom_path" 
-                                       placeholder="Ej: Descargas/MusicaHRA">
-                            </div>
                             
                             <!-- Panel de estimaciones -->
                             <div id="info-panel" class="alert alert-secondary d-none mb-3">
@@ -78,10 +78,10 @@ HTML_TEMPLATE = """
                                 </ul>
                             </div>
 
-                            <!-- Cuadro de avance individual en tiempo real -->
+                            <!-- Cuadro de la interfaz del script en tiempo real -->
                             <div id="progress-container" class="mb-3 d-none">
-                                <label class="text-primary fw-bold mb-1">Progreso y estado de la conexión:</label>
-                                <div id="console-output" class="console-box mb-2">Iniciando descarga en alta fidelidad...</div>
+                                <label class="text-primary fw-bold mb-1">Consola de Descarga (Progreso individual):</label>
+                                <div id="console-output" class="console-box mb-2">Inicializando...</div>
                                 <div class="progress" style="height: 15px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" 
                                          role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
@@ -124,73 +124,73 @@ HTML_TEMPLATE = """
             e.preventDefault();
             
             const urlInput = document.getElementById('url').value;
-            const customPath = document.getElementById('download-path').value;
             const progressContainer = document.getElementById('progress-container');
             const btnContainer = document.getElementById('btn-container');
             const alertContainer = document.getElementById('alert-container');
             const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Conectando con el servidor y extrayendo pistas...\\n';
+            consoleBox.innerHTML = '>> Se estableció conexión con el servidor.\\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
             try {
-                // Usamos un controlador con timeout extendido a 9 minutos en el cliente JavaScript
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 540000);
-
-                const response = await fetch('/download', {
+                // Iniciamos la petición de descarga en el servidor
+                const response = await fetch('/start-download', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'url=' + encodeURIComponent(urlInput) + '&custom_path=' + encodeURIComponent(customPath),
-                    signal: controller.signal
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'url=' + encodeURIComponent(urlInput)
                 });
 
-                clearTimeout(timeoutId);
-
-                if (response.ok) {
-                    consoleBox.innerHTML += '>> ¡Paquete ZIP listo! Transfiriendo archivo al navegador...\\n';
-                    const blob = await response.blob();
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = "Musica_HRA.zip";
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-
-                    progressContainer.classList.add('d-none');
-                    btnContainer.classList.remove('d-none');
-                    alertContainer.innerHTML = `
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            ¡Descarga completada con éxito en tu navegador!
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>`;
-                    document.getElementById('url').value = '';
-                    document.getElementById('info-panel').classList.add('d-none');
-                } else {
-                    const data = await response.json();
-                    progressContainer.classList.add('d-none');
-                    btnContainer.classList.remove('d-none');
-                    alertContainer.innerHTML = `
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            ${data.message || "Error desconocido en el proceso."}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>`;
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.message);
                 }
+
+                const sessionId = data.session_id;
+
+                // Conectamos al canal de eventos en tiempo real para leer la consola del script
+                const eventSource = new EventSource(`/stream-logs/${sessionId}`);
+                
+                eventSource.onmessage = function(event) {
+                    if (event.data === "[DONE]") {
+                        eventSource.close();
+                        // Descargar el archivo ZIP generado automáticamente
+                        window.location.href = `/get-zip/${sessionId}`;
+                        progressContainer.classList.add('d-none');
+                        btnContainer.classList.remove('d-none');
+                        alertContainer.innerHTML = `
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                ¡Descarga completada con éxito y enviada a tu navegador!
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>`;
+                        document.getElementById('url').value = '';
+                        document.getElementById('info-panel').classList.add('d-none');
+                    } else if (event.data.startsWith("[ERROR]")) {
+                        eventSource.close();
+                        progressContainer.classList.add('d-none');
+                        btnContainer.classList.remove('d-none');
+                        alertContainer.innerHTML = `
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                ${event.data.replace("[ERROR]", "")}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>`;
+                    } else {
+                        consoleBox.textContent += event.data + "\\n";
+                        consoleBox.scrollTop = consoleBox.scrollHeight;
+                    }
+                };
+
+                eventSource.onerror = function() {
+                    eventSource.close();
+                };
+
             } catch (error) {
                 progressContainer.classList.add('d-none');
                 btnContainer.classList.remove('d-none');
-                let errText = "Error de conexión persistente con el servidor.";
-                if (error.name === 'AbortError') {
-                    errText = "La descarga tardó demasiado tiempo y el navegador canceló la solicitud.";
-                }
                 alertContainer.innerHTML = `
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        ${errText}
+                        ${error.message || "Ocurrió un error de comunicación con el servidor."}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>`;
             }
@@ -204,36 +204,42 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route("/download", methods=["POST"])
-def download():
-    song_url = request.form.get("url")
+def run_download_process(session_id, song_url):
+    download_logs[session_id] = []
     
-    if not song_url:
-        return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."}), 400
-
-    download_dir = os.path.join(os.getcwd(), "downloads")
+    download_dir = os.path.join(os.getcwd(), f"downloads_{session_id}")
     if os.path.exists(download_dir):
         shutil.rmtree(download_dir)
     os.makedirs(download_dir, exist_ok=True)
 
     try:
-        # Invocación con python3 corregido y tiempo límite de 500 segundos
-        process = subprocess.run(
-            ["python3", "HRA-DL.py", "--url", song_url],
-            capture_output=True,
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(base_dir, "HRA-DL.py")
+
+        # Ejecutamos el script leyendo su salida estándar línea por línea en tiempo real
+        process = subprocess.Popen(
+            ["python3", script_path, "--url", song_url],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=500
+            bufsize=1,
+            cwd=download_dir
         )
 
-        if process.returncode != 0:
-            error_message = process.stderr.strip() or process.stdout.strip() or "Error desconocido."
-            return jsonify({"success": False, "message": f"Error en el proceso: {error_message}"}), 500
+        for line in process.stdout:
+            clean_line = line.strip()
+            if clean_line:
+                download_logs[session_id].append(clean_line)
 
-        target_folder = download_dir if os.path.exists(download_dir) and os.listdir(download_dir) else os.getcwd()
-        
-        # Filtro interno estricto
+        process.wait()
+
+        if process.returncode != 0:
+            download_logs[session_id].append("[ERROR] Error en el proceso de descarga del script.")
+            return
+
+        # Filtro interno estricto (solo FLAC, JPG, JPEG, PNG)
         allowed_extensions = ('.flac', '.jpg', '.jpeg', '.png')
-        for root, dirs, files in os.walk(target_folder):
+        for root, dirs, files in os.walk(download_dir):
             for file in files:
                 if not file.lower().endswith(allowed_extensions):
                     try:
@@ -241,9 +247,9 @@ def download():
                     except Exception:
                         pass
 
-        # Normalización de timestamps para evitar errores de ZIP en Linux
+        # Normalización de timestamps para evitar el error de ZIP antes de 1980 en Linux
         current_time = time.time()
-        for root, dirs, files in os.walk(target_folder):
+        for root, dirs, files in os.walk(download_dir):
             for file in files:
                 file_path = os.path.join(root, file)
                 try:
@@ -251,15 +257,52 @@ def download():
                 except Exception:
                     pass
 
-        zip_filename = "HRA_Download"
-        zip_path = shutil.make_archive(zip_filename, 'zip', target_folder)
+        # Crear archivo ZIP final de la sesión
+        zip_path = os.path.join(os.getcwd(), f"HRA_Download_{session_id}")
+        shutil.make_archive(zip_path, 'zip', download_dir)
+        download_logs[session_id].append("[DONE]")
 
-        return send_file(zip_path, as_attachment=True, download_name="Musica_HRA.zip")
-
-    except subprocess.TimeoutExpired:
-        return jsonify({"success": False, "message": "La descarga ha superado el tiempo límite del servidor y se ha detenido."}), 500
     except Exception as e:
-        return jsonify({"success": False, "message": f"Ocurrió un error inesperado: {str(e)}"}), 500
+        download_logs[session_id].append(f"[ERROR] Ocurrió un error inesperado: {str(e)}")
+
+@app.route("/start-download", methods=["POST"])
+def start_download():
+    song_url = request.form.get("url")
+    if not song_url:
+        return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."}), 400
+
+    session_id = str(time.time_ns())
+    
+    # Lanzar el proceso de descarga en un hilo independiente en segundo plano
+    thread = threading.Thread(target=run_download_process, args=(session_id, song_url))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({"success": True, "session_id": session_id})
+
+@app.route("/stream-logs/<session_id>")
+def stream_logs(session_id):
+    def generate():
+        index = 0
+        while True:
+            if session_id in download_logs:
+                logs = download_logs[session_id]
+                while index < len(logs):
+                    log_line = logs[index]
+                    yield f"data: {log_line}\n\n"
+                    if log_line == "[DONE]" or log_line.startswith("[ERROR]"):
+                        return
+                    index += 1
+            time.sleep(0.5)
+
+    return Response(generate(), mimetype="text/event-stream")
+
+@app.route("/get-zip/<session_id>")
+def get_zip(session_id):
+    zip_filename = f"HRA_Download_{session_id}.zip"
+    if os.path.exists(zip_filename):
+        return send_file(zip_filename, as_attachment=True, download_name="Musica_HRA.zip")
+    return jsonify({"success": False, "message": "Archivo no encontrado."}), 404
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
