@@ -37,7 +37,7 @@ def getOs():
 
 def osCommands(x):
     if getOs():
-        if x == "p":
+        if x == "p" and sys.stdin.isatty():
             os.system('pause >nul')
         elif x == "c":
             os.system('cls')
@@ -45,11 +45,38 @@ def osCommands(x):
             os.system('title HRA-DL (Optimized)')
     else:
         if x == "p":
-            os.system("read -rsp $''")  # Pausa segura para entornos Unix
+            if sys.stdin.isatty():
+                os.system("read -rsp $''")  # Pausa segura solo si hay terminal real
         elif x == "c":
             os.system('clear')
         elif x == "t":
             sys.stdout.write("\x1b]2;HRA-DL (Optimized)\x07")
+
+# ... (tus funciones login, fetchMetadata, fetchTrack, etc. se quedan igual)
+
+if __name__ == '__main__':
+    osCommands('t')
+
+    try:
+        with open("config.json", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"[ERROR] No se pudo leer config.json: {e}")
+        sys.exit(1)
+
+    userData = login(config["email"], config["password"])
+
+    try:
+        while True:
+            main(userData)
+    except (KeyboardInterrupt, SystemExit):
+        sys.exit()
+    except Exception:
+        traceback.print_exc()
+        # Evita el EOFError en servidores web (Render / Flask)
+        if sys.stdin.isatty():
+            input("\nAn exception has occurred. Press enter to exit.")
+        sys.exit(1)
 
 def login(email, pwd):
     url = f'https://streaming.highresaudio.com:8182/vault3/user/login?password={pwd}&username={email}'
