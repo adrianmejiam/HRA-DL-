@@ -17,7 +17,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HRA-DL Web Downloader - Máxima Fidelidad</title>
+    <title>HIGHRESAUDIO - Descargador Lossless</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .brand-header {
@@ -37,7 +37,7 @@ HTML_TEMPLATE = """
             color: #00ff66;
             font-family: monospace;
             font-size: 0.85rem;
-            height: 150px;
+            height: 200px;
             overflow-y: auto;
             border-radius: 6px;
             padding: 10px;
@@ -61,6 +61,7 @@ HTML_TEMPLATE = """
                 </ul>
 
                 <div class="tab-content" id="mainTabsContent">
+                    <!-- PESTAÑA 1: NUEVA DESCARGA -->
                     <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
                         <div class="card shadow-lg border-0">
                             <div class="card-header brand-header text-white text-center py-4">
@@ -111,9 +112,10 @@ HTML_TEMPLATE = """
                                         </ul>
                                     </div>
 
+                                    <!-- CUADRO DE AVANCE / CONSOLA EN TIEMPO REAL -->
                                     <div id="progress-container" class="mb-3 d-none">
-                                        <label class="text-primary fw-bold mb-1">Consola de Descarga Lossless:</label>
-                                        <div id="console-output" class="console-box mb-2">Inicializando...</div>
+                                        <label class="text-primary fw-bold mb-1">Consola de Avance en Tiempo Real:</label>
+                                        <div id="console-output" class="console-box mb-2">Inicializando proceso de descarga...</div>
                                         <div class="progress" style="height: 15px;">
                                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" 
                                                  role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
@@ -128,6 +130,7 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
 
+                    <!-- PESTAÑA 2: PANEL DE AVANCE Y DESCARGAS -->
                     <div class="tab-pane fade" id="monitor-pane" role="tabpanel">
                         <div class="card shadow-lg border-0">
                             <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
@@ -157,166 +160,4 @@ HTML_TEMPLATE = """
             const infoPanel = document.getElementById('info-panel');
             if (val.includes('album')) {
                 document.getElementById('est-size').textContent = 'Aprox. 350 MB - 1.5 GB (FLAC Lossless)';
-                document.getElementById('est-time').textContent = '1 a 3 minutos';
-                infoPanel.classList.remove('d-none');
-            } else if (val.includes('track') || val.includes('title')) {
-                document.getElementById('est-size').textContent = 'Aprox. 35 MB - 150 MB (FLAC Lossless)';
-                document.getElementById('est-time').textContent = '15 a 30 segundos';
-                infoPanel.classList.remove('d-none');
-            } else {
-                infoPanel.classList.add('d-none');
-            }
-        });
-
-        document.getElementById('download-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const urlInput = document.getElementById('url').value;
-            const emailInput = document.getElementById('email').value;
-            const passwordInput = document.getElementById('password').value;
-            const cookieInput = document.getElementById('cookie').value;
-            
-            const progressContainer = document.getElementById('progress-container');
-            const btnContainer = document.getElementById('btn-container');
-            const alertContainer = document.getElementById('alert-container');
-            const consoleBox = document.getElementById('console-output');
-            
-            alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Conectando con HIGHRESAUDIO.com...\\n';
-            progressContainer.classList.remove('d-none');
-            btnContainer.classList.add('d-none');
-
-            try {
-                const response = await fetch('/start-download', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'url=' + encodeURIComponent(urlInput) + 
-                          '&email=' + encodeURIComponent(emailInput) + 
-                          '&password=' + encodeURIComponent(passwordInput) + 
-                          '&cookie=' + encodeURIComponent(cookieInput)
-                });
-
-                const data = await response.json();
-                if (!data.success) {
-                    throw new Error(data.message);
-                }
-
-                const sessionId = data.session_id;
-                const eventSource = new EventSource('/stream-logs/' + sessionId);
-                
-                eventSource.onmessage = function(event) {
-                    if (event.data === "[DONE]") {
-                        eventSource.close();
-                        window.location.href = '/get-zip/' + sessionId;
-                        progressContainer.classList.add('d-none');
-                        btnContainer.classList.remove('d-none');
-                        alertContainer.innerHTML = `
-                            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                                ¡Descarga Lossless completada y empaquetada con éxito!
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>`;
-                        document.getElementById('url').value = '';
-                        document.getElementById('email').value = '';
-                        document.getElementById('password').value = '';
-                        document.getElementById('cookie').value = '';
-                        document.getElementById('info-panel').classList.add('d-none');
-                    } else if (event.data.indexOf("[ERROR]") === 0) {
-                        eventSource.close();
-                        progressContainer.classList.add('d-none');
-                        btnContainer.classList.remove('d-none');
-                        alertContainer.innerHTML = `
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                ${event.data.replace("[ERROR]", "")}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>`;
-                    } else {
-                        consoleBox.textContent += event.data + "\\n";
-                        consoleBox.scrollTop = consoleBox.scrollHeight;
-                    }
-                };
-
-                eventSource.onerror = function() {
-                    eventSource.close();
-                };
-
-            } catch (error) {
-                progressContainer.classList.add('d-none');
-                btnContainer.classList.remove('d-none');
-                alertContainer.innerHTML = `
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        ${error.message || "Ocurrió un error de comunicación con el servidor."}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>`;
-            }
-        });
-
-        async function refreshActiveDownloads() {
-            const container = document.getElementById('active-downloads-list');
-            container.innerHTML = '<p class="text-muted text-center">Actualizando estado...</p>';
-
-            try {
-                const response = await fetch('/api/sessions');
-                const data = await response.json();
-
-                if (!data.sessions || data.sessions.length === 0) {
-                    container.innerHTML = '<p class="text-muted text-center mb-0">No hay descargas registradas o activas actualmente.</p>';
-                    return;
-                }
-
-                let html = '<div class="list-group">';
-                data.sessions.forEach(s => {
-                    let badgeClass = 'bg-secondary';
-                    let statusText = s.status;
-                    if (s.status === 'Procesando...') badgeClass = 'bg-warning text-dark';
-                    else if (s.status === 'Completado') badgeClass = 'bg-success';
-                    else if (s.status.indexOf('Error') !== -1) badgeClass = 'bg-danger';
-
-                    html += `
-                        <div class="list-group-item list-group-item-action flex-column align-items-start mb-2 rounded shadow-sm border">
-                            <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1 text-truncate" style="max-width: 70%;"><strong>URL:</strong> ${s.url}</h6>
-                                <span class="badge ${badgeClass} align-self-center">${statusText}</span>
-                            </div>
-                            <p class="mb-1 small text-muted text-truncate">Último registro: ${s.last_log}</p>
-                            <div class="d-flex justify-content-between align-items-center mt-2">
-                                <small class="text-muted">ID: ${s.session_id}</small>
-                                ${s.ready_to_download ? `<a href="/get-zip/${s.session_id}" class="btn btn-sm btn-success fw-bold">Descargar ZIP</a>` : ''}
-                            </div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-                container.innerHTML = html;
-            } catch (error) {
-                container.innerHTML = '<p class="text-danger text-center">Error al conectar con el servidor para obtener las sesiones.</p>';
-            }
-        }
-
-        setInterval(() => {
-            const monitorTab = document.getElementById('monitor-pane');
-            if (monitorTab && monitorTab.classList.contains('active')) {
-                refreshActiveDownloads();
-            }
-        }, 5000);
-    </script>
-</body>
-</html>
-"""
-
-def background_cleanup_janitor():
-    while True:
-        time.sleep(1800)
-        now = time.time()
-        try:
-            for item in os.listdir(os.getcwd()):
-                item_path = os.path.join(os.getcwd(), item)
-                if item.startswith("HRA_Download_") and item.endswith(".zip"):
-                    if os.path.isfile(item_path) and (now - os.path.getmtime(item_path) > 1800):
-                        os.remove(item_path)
-                elif item.startswith("downloads_") and os.path.isdir(item_path):
-                    if now - os.path.getmtime(item_path) > 1800:
-                        shutil.rmtree(item_path, ignore_errors=True)
-        except Exception:
-            pass
-
-janitor_thread = threading.Thread(target=background_cleanup_janitor,
+                document.
