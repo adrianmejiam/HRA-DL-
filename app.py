@@ -15,6 +15,19 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HRA-DL Web Downloader</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .console-box {
+            background-color: #1e1e1e;
+            color: #00ff66;
+            font-family: monospace;
+            font-size: 0.85rem;
+            max-height: 180px;
+            overflow-y: auto;
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+    </style>
 </head>
 <body class="bg-light d-flex flex-column min-vh-100">
     <div class="container py-5 my-auto">
@@ -38,8 +51,8 @@ HTML_TEMPLATE = """
                             <div class="mb-3">
                                 <label for="download-path" class="form-label font-weight-bold">Carpeta de destino preferida (Opcional):</label>
                                 <input type="text" class="form-control" id="download-path" name="custom_path" 
-                                       placeholder="Ej: Descargas/MusicaHRA (El navegador usará tu carpeta predeterminada si se deja vacío)">
-                                <div class="form-text">Los archivos se empaquetarán en un ZIP listo para tu navegador.</div>
+                                       placeholder="Ej: Descargas/MusicaHRA">
+                                <div class="form-text">Se filtrarán solo archivos FLAC, JPG y PNG limpios en el ZIP final.</div>
                             </div>
                             
                             <!-- Panel de estimaciones -->
@@ -50,13 +63,13 @@ HTML_TEMPLATE = """
                                 </ul>
                             </div>
 
+                            <!-- Cuadro de avance individual en tiempo real -->
                             <div id="progress-container" class="mb-3 d-none">
-                                <label class="form-label text-primary fw-bold" id="status-text">Descargando y preparando archivos...</label>
-                                <div class="progress" style="height: 25px;">
-                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                                         role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
-                                        Por favor, espera unos segundos...
-                                    </div>
+                                <label class="form-label text-primary fw-bold">Avance individual de canciones y recursos:</label>
+                                <div id="console-output" class="console-box mb-2">Iniciando conexión con HRA-DL...</div>
+                                <div class="progress" style="height: 15px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                         role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
                                 </div>
                             </div>
 
@@ -76,13 +89,12 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        // Estimaciones dinámicas basadas en el enlace introducido
         document.getElementById('url').addEventListener('input', function(e) {
             const val = e.target.value;
             const infoPanel = document.getElementById('info-panel');
             if (val.includes('album')) {
                 document.getElementById('est-size').textContent = 'Aprox. 350 MB - 1.2 GB (FLAC Lossless)';
-                document.getElementById('est-time').textContent = '1 a 3 minutos (dependiendo de la conexión)';
+                document.getElementById('est-time').textContent = '1 a 3 minutos';
                 infoPanel.classList.remove('d-none');
             } else if (val.includes('track') || val.includes('title')) {
                 document.getElementById('est-size').textContent = 'Aprox. 35 MB - 120 MB';
@@ -93,7 +105,6 @@ HTML_TEMPLATE = """
             }
         });
 
-        // Manejo del formulario y descarga del archivo ZIP
         document.getElementById('download-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -102,8 +113,10 @@ HTML_TEMPLATE = """
             const progressContainer = document.getElementById('progress-container');
             const btnContainer = document.getElementById('btn-container');
             const alertContainer = document.getElementById('alert-container');
+            const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
+            consoleBox.innerHTML = '>> Conectando y analizando enlace...\\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
@@ -117,11 +130,12 @@ HTML_TEMPLATE = """
                 });
 
                 if (response.ok) {
+                    consoleBox.innerHTML += '>> ¡Paquete ZIP generado con éxito! Descargando en navegador...\\n';
                     const blob = await response.blob();
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = downloadUrl;
-                    a.download = "HRA_Music_Download.zip";
+                    a.download = "Musica_HRA_Limpia.zip";
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
@@ -130,7 +144,7 @@ HTML_TEMPLATE = """
                     btnContainer.classList.remove('d-none');
                     alertContainer.innerHTML = `
                         <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            ¡Descarga completada y enviada a tu navegador con éxito!
+                            ¡Descarga completada y filtrada (solo FLAC, JPG, PNG) con éxito!
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>`;
                     document.getElementById('url').value = '';
@@ -167,7 +181,6 @@ def index():
 @app.route("/download", methods=["POST"])
 def download():
     song_url = request.form.get("url")
-    custom_path = request.form.get("custom_path", "").strip()
     
     if not song_url:
         return jsonify({"success": False, "message": "Por favor, introduce un enlace válido."}), 400
@@ -191,8 +204,17 @@ def download():
 
         target_folder = download_dir if os.path.exists(download_dir) and os.listdir(download_dir) else os.getcwd()
         
-        # SOLUCIÓN AL ERROR DE TIMESTAMPS ANTERIORES A 1980:
-        # Actualizamos la fecha de acceso y modificación de todos los archivos encontrados al momento actual
+        # FILTRO ESTRICTO: ELIMINAR CUALQUIER ARCHIVO QUE NO SEA FLAC, JPG, JPEG O PNG
+        allowed_extensions = ('.flac', '.jpg', '.jpeg', '.png')
+        for root, dirs, files in os.walk(target_folder):
+            for file in files:
+                if not file.lower().endswith(allowed_extensions):
+                    try:
+                        os.remove(os.path.join(root, file))
+                    except Exception:
+                        pass
+
+        # Normalizar fechas de timestamps para evitar el error anterior de 1980 en ZIP
         current_time = time.time()
         for root, dirs, files in os.walk(target_folder):
             for file in files:
@@ -205,7 +227,7 @@ def download():
         zip_filename = "HRA_Download"
         zip_path = shutil.make_archive(zip_filename, 'zip', target_folder)
 
-        return send_file(zip_path, as_attachment=True, download_name="Musica_HRA.zip")
+        return send_file(zip_path, as_attachment=True, download_name="Musica_HRA_Pura.zip")
 
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "message": "La descarga ha tardado más de 5 minutos y se ha interrumpido."}), 500
