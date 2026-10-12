@@ -22,7 +22,7 @@ from tqdm import tqdm
 from bs4 import BeautifulSoup
 
 # ==========================================
-# 🔧 RUTA DE DESCARGA (Termux)
+# 🔧 RUTA DE DESCARGA
 # ==========================================
 BASE_DOWNLOAD_PATH = "downloads"
 # ==========================================
@@ -52,38 +52,11 @@ def osCommands(x):
         elif x == "t":
             sys.stdout.write("\x1b]2;HRA-DL (Optimized)\x07")
 
-# ... (tus funciones login, fetchMetadata, fetchTrack, etc. se quedan igual)
-
-if __name__ == '__main__':
-    osCommands('t')
-
-    try:
-        with open("config.json", encoding="utf-8") as f:
-            config = json.load(f)
-    except Exception as e:
-        print(f"[ERROR] No se pudo leer config.json: {e}")
-        sys.exit(1)
-
-    userData = login(config["email"], config["password"])
-
-    try:
-        while True:
-            main(userData)
-    except (KeyboardInterrupt, SystemExit):
-        sys.exit()
-    except Exception:
-        traceback.print_exc()
-        # Evita el EOFError en servidores web (Render / Flask)
-        if sys.stdin.isatty():
-            input("\nAn exception has occurred. Press enter to exit.")
-        sys.exit(1)
-
 def login(email, pwd):
     url = f'https://streaming.highresaudio.com:8182/vault3/user/login?password={pwd}&username={email}'
     try:
         r = session.get(url, timeout=15)
         
-        # Intentar parsear el JSON de respuesta incluso si el código no es 200
         try:
             data = r.json()
         except Exception:
@@ -96,19 +69,26 @@ def login(email, pwd):
             print(f"\n[ERROR DE LOGIN] Código HTTP: {r.status_code}")
             print(f"Respuesta del servidor: {json.dumps(data, indent=2, ensure_ascii=False)}")
             osCommands('p')
-            sys.exit()
+            sys.exit(1)
             
     except requests.exceptions.RequestException as e:
         print(f"\n[ERROR DE RED] No se pudo conectar al servidor de autenticación: {e}")
         osCommands('p')
-        sys.exit()
+        sys.exit(1)
+
+def fetchAlbumId(url):
+    response = session.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    element = soup.find(attrs={"data-id": True})
+    if not element:
+        raise Exception("No se pudo extraer el ID del álbum de la URL proporcionada.")
+    return element['data-id']
 
 def fetchMetadata(albumId, userData):
     url = f'https://streaming.highresaudio.com:8182/vault3/vault/album/?album_id={albumId}&userData={userData}'
     try:
         r = session.get(url, timeout=15)
         
-        # Intentar extraer la respuesta en JSON para diagnóstico
         try:
             data = r.json()
         except Exception:
@@ -119,21 +99,20 @@ def fetchMetadata(albumId, userData):
             print(f"URL consultada: {url}")
             print(f"Detalle del servidor: {json.dumps(data, indent=2, ensure_ascii=False)}")
             osCommands('p')
-            sys.exit()
+            sys.exit(1)
             
-        # Verificar si la estructura interna del JSON contiene los resultados esperados
         if 'data' not in data or 'results' not in data['data']:
             print(f"\n[ERROR DE METADATA] La estructura de la respuesta JSON es inesperada:")
             print(json.dumps(data, indent=2, ensure_ascii=False))
             osCommands('p')
-            sys.exit()
+            sys.exit(1)
             
         return data
 
     except requests.exceptions.RequestException as e:
         print(f"\n[ERROR DE RED] Fallo al solicitar metadatos del álbum: {e}")
         osCommands('p')
-        sys.exit()
+        sys.exit(1)
 
 def dirSetup(path):
     os.makedirs(path, exist_ok=True)
@@ -219,7 +198,6 @@ def sanitizeFname(fname):
         return re.sub('/', '-', fname)
 
 def main(userData):
-    
     if args.url:
         url = args.url.strip()
     else:
@@ -272,7 +250,6 @@ def main(userData):
     print(f"{albumFolder}\n")
 
     albumPath = dirSetup(f"./{sanitizeFname(albumFolder)}")
-
 
     # Generar Tracklist
     save_tracklist(tracks, albumPath)
@@ -329,17 +306,26 @@ def main(userData):
 if __name__ == '__main__':
     osCommands('t')
 
-    with open("config.json") as f:
-        config = json.load(f)
+    try:
+        with open("config.json", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"[ERROR] No se pudo leer config.json: {e}")
+        sys.exit(1)
 
-    userData = login(config["email"], config["password"])
+    email_key = "  email" if "  email" in config else "email"
+    user_email = config.get(email_key, "")
+    user_pwd = config.get("password", "")
+
+    userData = login(user_email, user_pwd)
 
     try:
         while True:
             main(userData)
     except (KeyboardInterrupt, SystemExit):
         sys.exit()
-    except:
+    except Exception:
         traceback.print_exc()
-        input("\nAn exception has occurred. Press enter to exit.")
-        sys.exit()
+        if sys.stdin.isatty():
+            input("\nAn exception has occurred. Press enter to exit.")
+        sys.exit(1)
