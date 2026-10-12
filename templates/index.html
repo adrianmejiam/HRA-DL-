@@ -11,17 +11,25 @@
     <style>
         body {
             background-color: #121212;
-            color: #e0e0e0;
+            color: #ffffff; /* Texto general en blanco puro */
             font-family: system-ui, -apple-system, sans-serif;
         }
         .card {
             background-color: #1e1e1e;
             border: 1px solid #2d2d2d;
+            color: #ffffff;
+        }
+        .form-label {
+            color: #ffffff !important; /* Etiquetas del formulario en blanco nítido */
+            font-weight: 500;
         }
         .form-control, .form-control:focus {
             background-color: #2a2a2a;
             border-color: #404040;
-            color: #fff;
+            color: #ffffff !important; /* Texto que escribe el usuario en blanco */
+        }
+        .form-control::placeholder {
+            color: #a0a0a0; /* Placeholder visible pero sutil */
         }
         .form-control:focus {
             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
@@ -39,10 +47,14 @@
             font-size: 0.9rem;
         }
         .table {
-            color: #e0e0e0;
+            color: #ffffff !important; /* Textos de la tabla en blanco */
         }
         .table-dark {
             background-color: #181818;
+            color: #ffffff;
+        }
+        .text-muted {
+            color: #b0b0b0 !important; /* Texto secundario más claro para mejor lectura */
         }
     </style>
 </head>
@@ -52,7 +64,7 @@
         <!-- Header -->
         <div class="row mb-4">
             <div class="col text-center">
-                <h1 class="display-6 fw-bold text-light"><i class="fa-solid fa-headphones-simple text-primary me-2"></i> HRA-DL Web Interface</h1>
+                <h1 class="display-6 fw-bold text-white"><i class="fa-solid fa-headphones-simple text-primary me-2"></i> HRA-DL Web Interface</h1>
                 <p class="text-muted">Descarga álbumes y pistas Lossless en alta resolución desde HighResAudio de forma automatizada.</p>
             </div>
         </div>
@@ -62,7 +74,7 @@
             <div class="col-lg-6">
                 <div class="card shadow-sm h-100">
                     <div class="card-body p-4">
-                        <h4 class="card-title mb-3"><i class="fa-solid fa-download me-2"></i> Nueva Descarga</h4>
+                        <h4 class="card-title mb-3 text-white"><i class="fa-solid fa-download me-2"></i> Nueva Descarga</h4>
                         <form id="downloadForm">
                             <div class="mb-3">
                                 <label for="url" class="form-label">URL del Álbum o Pista (HRA)</label>
@@ -94,7 +106,7 @@
             <div class="col-lg-6">
                 <div class="card shadow-sm h-100">
                     <div class="card-body p-4 d-flex flex-column">
-                        <h4 class="card-title mb-3"><i class="fa-solid fa-terminal me-2"></i> Consola en Vivo</h4>
+                        <h4 class="card-title mb-3 text-white"><i class="fa-solid fa-terminal me-2"></i> Consola en Vivo</h4>
                         <div id="consoleBox" class="console-box flex-grow-1 mb-3">
                             <span class="text-muted">// Esperando inicio de sesión y descarga...</span>
                         </div>
@@ -113,16 +125,16 @@
             <div class="col">
                 <div class="card shadow-sm">
                     <div class="card-body p-4">
-                        <h4 class="card-title mb-3"><i class="fa-solid fa-list-check me-2"></i> Sesiones y Estado Actual</h4>
+                        <h4 class="card-title mb-3 text-white"><i class="fa-solid fa-list-check me-2"></i> Sesiones y Estado Actual</h4>
                         <div class="table-responsive">
                             <table class="table table-dark table-striped align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th>ID de Sesión</th>
-                                        <th>URL</th>
-                                        <th>Estado</th>
-                                        <th>Último Log</th>
-                                        <th class="text-end">Acción</th>
+                                        <th class="text-white">ID de Sesión</th>
+                                        <th class="text-white">URL</th>
+                                        <th class="text-white">Estado</th>
+                                        <th class="text-white">Último Log</th>
+                                        <th class="text-end text-white">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody id="sessionsTableBody">
@@ -167,7 +179,6 @@
                     const sessionId = data.session_id;
                     consoleBox.innerHTML += `<div>[INFO] Sesión iniciada ID: ${sessionId}</div>`;
                     
-                    // Conectar a Server-Sent Events (SSE)
                     if (currentEventSource) {
                         currentEventSource.close();
                     }
@@ -181,7 +192,6 @@
                             consoleBox.scrollTop = consoleBox.scrollHeight;
                             currentEventSource.close();
                             
-                            // Mostrar botón de descarga
                             downloadZipBtn.href = `/get-zip/${sessionId}`;
                             downloadZipBtn.classList.remove('d-none');
                             submitBtn.disabled = false;
@@ -249,8 +259,8 @@
 
                     tbody.innerHTML += `
                         <tr>
-                            <td><code>${s.session_id.slice(-6)}</code></td>
-                            <td class="text-truncate" style="max-width: 200px;" title="${s.url}">${s.url}</td>
+                            <td><code class="text-white">${s.session_id.slice(-6)}</code></td>
+                            <td class="text-truncate text-white" style="max-width: 200px;" title="${s.url}">${s.url}</td>
                             <td><span class="badge ${badgeClass}">${s.status}</span></td>
                             <td class="text-muted text-truncate" style="max-width: 250px;">${s.last_log}</td>
                             <td class="text-end">${actionHtml}</td>
@@ -262,7 +272,6 @@
             }
         }
 
-        // Refrescar tabla de sesiones cada 5 segundos
         setInterval(loadSessions, 5000);
         loadSessions();
     </script>
