@@ -81,12 +81,11 @@ HTML_TEMPLATE = """
                             <!-- Cuadro de avance individual en tiempo real -->
                             <div id="progress-container" class="mb-3 d-none">
                                 <label class="text-primary fw-bold mb-1">Progreso y estado de la conexión:</label>
-                                <div id="console-output" class="console-box mb-2">Estableciendo canal seguro con el servidor...</div>
+                                <div id="console-output" class="console-box mb-2">Iniciando descarga en alta fidelidad...</div>
                                 <div class="progress" style="height: 15px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" 
                                          role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
                                 </div>
-                                <small class="text-muted d-block mt-1 text-center" id="stability-note">Modo de alta estabilidad activado (evitando desconexiones)...</small>
                             </div>
 
                             <div class="d-grid" id="btn-container">
@@ -121,20 +120,6 @@ HTML_TEMPLATE = """
             }
         });
 
-        // Función con reintentos automáticos para evitar desconexiones de red
-        async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    return response;
-                } catch (error) {
-                    if (i === retries - 1) throw error;
-                    document.getElementById('console-output').innerHTML += `>> Reconectando con el servidor (intento ${i + 2})...\\n`;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            }
-        }
-
         document.getElementById('download-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -146,18 +131,25 @@ HTML_TEMPLATE = """
             const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Canal establecido. Procesando enlace en segundo plano...\\n';
+            consoleBox.innerHTML = '>> Conectando con el servidor y extrayendo pistas...\\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
             try {
-                const response = await fetchWithRetry('/download', {
+                // Usamos un controlador con timeout extendido a 9 minutos en el cliente JavaScript
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 540000);
+
+                const response = await fetch('/download', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: 'url=' + encodeURIComponent(urlInput) + '&custom_path=' + encodeURIComponent(customPath)
-                }, 3, 3000);
+                    body: 'url=' + encodeURIComponent(urlInput) + '&custom_path=' + encodeURIComponent(customPath),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
 
                 if (response.ok) {
                     consoleBox.innerHTML += '>> ¡Paquete ZIP listo! Transfiriendo archivo al navegador...\\n';
@@ -192,9 +184,13 @@ HTML_TEMPLATE = """
             } catch (error) {
                 progressContainer.classList.add('d-none');
                 btnContainer.classList.remove('d-none');
+                let errText = "Error de conexión persistente con el servidor.";
+                if (error.name === 'AbortError') {
+                    errText = "La descarga tardó demasiado tiempo y el navegador canceló la solicitud.";
+                }
                 alertContainer.innerHTML = `
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        Error de conexión persistente con el servidor. Comprueba tu enlace o conexión de red.
+                        ${errText}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>`;
             }
@@ -221,12 +217,12 @@ def download():
     os.makedirs(download_dir, exist_ok=True)
 
     try:
-        # Aumentamos el tiempo límite a 600 segundos (10 minutos) para evitar cortes prematuros en álbumes pesados
+        # Invocación con python3 corregido y tiempo límite de 500 segundos
         process = subprocess.run(
             ["python3", "HRA-DL.py", "--url", song_url],
             capture_output=True,
             text=True,
-            timeout=600
+            timeout=500
         )
 
         if process.returncode != 0:
@@ -235,7 +231,7 @@ def download():
 
         target_folder = download_dir if os.path.exists(download_dir) and os.listdir(download_dir) else os.getcwd()
         
-        # Filtro estricto interno sin mensajes visibles en pantalla
+        # Filtro interno estricto
         allowed_extensions = ('.flac', '.jpg', '.jpeg', '.png')
         for root, dirs, files in os.walk(target_folder):
             for file in files:
@@ -245,7 +241,7 @@ def download():
                     except Exception:
                         pass
 
-        # Normalización de fechas para evitar el error ZIP de timestamps anteriores a 1980
+        # Normalización de timestamps para evitar errores de ZIP en Linux
         current_time = time.time()
         for root, dirs, files in os.walk(target_folder):
             for file in files:
@@ -261,7 +257,7 @@ def download():
         return send_file(zip_path, as_attachment=True, download_name="Musica_HRA.zip")
 
     except subprocess.TimeoutExpired:
-        return jsonify({"success": False, "message": "La descarga ha superado el tiempo límite de 10 minutos y se ha detenido."}), 500
+        return jsonify({"success": False, "message": "La descarga ha superado el tiempo límite del servidor y se ha detenido."}), 500
     except Exception as e:
         return jsonify({"success": False, "message": f"Ocurrió un error inesperado: {str(e)}"}), 500
 
