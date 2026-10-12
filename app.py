@@ -8,7 +8,6 @@ from flask import Flask, render_template_string, request, jsonify, send_file, Re
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "clave-secreta-por-defecto")
 
-# Diccionario global para almacenar los logs y metadatos de las sesiones de descarga
 download_logs = {}
 session_metadata = {}
 
@@ -52,7 +51,6 @@ HTML_TEMPLATE = """
     <div class="container py-5 my-auto">
         <div class="row justify-content-center">
             <div class="col-md-10">
-                <!-- Navegación por pestañas -->
                 <ul class="nav nav-tabs mb-4 justify-content-center fw-bold" id="mainTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active text-dark" id="download-tab" data-bs-toggle="tab" data-bs-target="#download-pane" type="button" role="tab">Nueva Descarga</button>
@@ -63,7 +61,6 @@ HTML_TEMPLATE = """
                 </ul>
 
                 <div class="tab-content" id="mainTabsContent">
-                    <!-- PESTAÑA 1: NUEVA DESCARGA -->
                     <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
                         <div class="card shadow-lg border-0">
                             <div class="card-header brand-header text-white text-center py-4">
@@ -84,7 +81,6 @@ HTML_TEMPLATE = """
                                                placeholder="https://www.highresaudio.com/es/album/artist/name-album">
                                     </div>
 
-                                    <!-- Credenciales de HIGHRESAUDIO -->
                                     <div class="card bg-light border mb-3">
                                         <div class="card-body p-3">
                                             <h6 class="fw-bold text-dark mb-2">Autenticación de Cuenta HIGHRESAUDIO (Opcional):</h6>
@@ -108,7 +104,6 @@ HTML_TEMPLATE = """
                                         </div>
                                     </div>
                                     
-                                    <!-- Panel de estimaciones -->
                                     <div id="info-panel" class="alert alert-secondary d-none mb-3">
                                         <ul class="mb-0 small">
                                             <li><strong>Tamaño estimado:</strong> <span id="est-size">Calculando...</span></li>
@@ -116,7 +111,6 @@ HTML_TEMPLATE = """
                                         </ul>
                                     </div>
 
-                                    <!-- Cuadro de la interfaz del script en tiempo real -->
                                     <div id="progress-container" class="mb-3 d-none">
                                         <label class="text-primary fw-bold mb-1">Consola de Descarga Lossless:</label>
                                         <div id="console-output" class="console-box mb-2">Inicializando...</div>
@@ -134,7 +128,6 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
 
-                    <!-- PESTAÑA 2: PANEL DE AVANCE Y DESCARGAS -->
                     <div class="tab-pane fade" id="monitor-pane" role="tabpanel">
                         <div class="card shadow-lg border-0">
                             <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
@@ -150,7 +143,6 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <!-- Créditos del Desarrollador -->
                 <div class="text-center mt-4 text-muted small">
                     Desarrollado por <strong>adrianmejiam</strong> | &copy; 2026
                 </div>
@@ -190,7 +182,7 @@ HTML_TEMPLATE = """
             const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Conectando con HIGHRESAUDIO.com...\\n';
+            consoleBox.innerHTML = '>> Conectando con HIGHRESAUDIO.com...\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
@@ -210,12 +202,12 @@ HTML_TEMPLATE = """
                 }
 
                 const sessionId = data.session_id;
-                const eventSource = new EventSource(`/stream-logs/${sessionId}`);
+                const eventSource = new EventSource('/stream-logs/' + sessionId);
                 
                 eventSource.onmessage = function(event) {
                     if (event.data === "[DONE]") {
                         eventSource.close();
-                        window.location.href = `/get-zip/${sessionId}`;
+                        window.location.href = '/get-zip/' + sessionId;
                         progressContainer.classList.add('d-none');
                         btnContainer.classList.remove('d-none');
                         alertContainer.innerHTML = `
@@ -228,7 +220,7 @@ HTML_TEMPLATE = """
                         document.getElementById('password').value = '';
                         document.getElementById('cookie').value = '';
                         document.getElementById('info-panel').classList.add('d-none');
-                    } else if (event.data.startsWith("[ERROR]")) {
+                    } else if (event.data.indexOf("[ERROR]") === 0) {
                         eventSource.close();
                         progressContainer.classList.add('d-none');
                         btnContainer.classList.remove('d-none');
@@ -238,7 +230,7 @@ HTML_TEMPLATE = """
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>`;
                     } else {
-                        consoleBox.textContent += event.data + "\\n";
+                        consoleBox.textContent += event.data + "\n";
                         consoleBox.scrollTop = consoleBox.scrollHeight;
                     }
                 };
@@ -277,7 +269,7 @@ HTML_TEMPLATE = """
                     let statusText = s.status;
                     if (s.status === 'Procesando...') badgeClass = 'bg-warning text-dark';
                     else if (s.status === 'Completado') badgeClass = 'bg-success';
-                    else if (s.status.includes('Error')) badgeClass = 'bg-danger';
+                    else if (s.status.indexOf('Error') !== -1) badgeClass = 'bg-danger';
 
                     html += `
                         <div class="list-group-item list-group-item-action flex-column align-items-start mb-2 rounded shadow-sm border">
@@ -370,8 +362,25 @@ def run_download_process(session_id, song_url, email, password, cookie_data):
         if email and password:
             cmd.extend(["-u", email, "-p", password])
 
-        # Llamada a Popen optimizada y con paréntesis correctamente cerrados
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.S
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            cwd=download_dir,
+            env=env
+        )
+
+        for line in process.stdout:
+            clean_line = line.strip()
+            if clean_line:
+                download_logs[session_id].append(clean_line)
+                session_metadata[session_id]["last_log"] = clean_line
+
+        process.wait()
+
+        if process.returncode != 0:
+            error_msg = f"[ERROR] El script HRA-DL.py finalizó con código de salida {process.returncode}."
+            download_logs[session_id].append(error_msg)
+            session_metadata[session_id]["s
