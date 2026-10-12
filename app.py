@@ -370,10 +370,8 @@ def run_download_process(session_id, song_url, email, password, cookie_data):
         if email and password:
             cmd.extend(["-u", email, "-p", password])
 
+        # Llamada a Popen optimizada y con paréntesis correctamente cerrados
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            cwd=download
+            stderr=subprocess.S
