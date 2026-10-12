@@ -182,7 +182,7 @@ HTML_TEMPLATE = """
             const consoleBox = document.getElementById('console-output');
             
             alertContainer.innerHTML = '';
-            consoleBox.innerHTML = '>> Conectando con HIGHRESAUDIO.com...\n';
+            consoleBox.innerHTML = '>> Conectando con HIGHRESAUDIO.com...\\n';
             progressContainer.classList.remove('d-none');
             btnContainer.classList.add('d-none');
 
@@ -230,7 +230,7 @@ HTML_TEMPLATE = """
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>`;
                     } else {
-                        consoleBox.textContent += event.data + "\n";
+                        consoleBox.textContent += event.data + "\\n";
                         consoleBox.scrollTop = consoleBox.scrollHeight;
                     }
                 };
@@ -377,10 +377,3 @@ def run_download_process(session_id, song_url, email, password, cookie_data):
             if clean_line:
                 download_logs[session_id].append(clean_line)
                 session_metadata[session_id]["last_log"] = clean_line
-
-        process.wait()
-
-        if process.returncode != 0:
-            error_msg = f"[ERROR] El script HRA-DL.py finalizó con código de salida {process.returncode}."
-            download_logs[session_id].append(error_msg)
-            session_metadata[session_id]["s
