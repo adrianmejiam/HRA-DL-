@@ -11,8 +11,14 @@
     <style>
         body {
             background-color: #121212;
-            color: #ffffff; /* Texto general en blanco puro */
+            color: #ffffff;
             font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .main-container {
+            flex: 1;
         }
         .card {
             background-color: #1e1e1e;
@@ -20,16 +26,16 @@
             color: #ffffff;
         }
         .form-label {
-            color: #ffffff !important; /* Etiquetas del formulario en blanco nítido */
+            color: #ffffff !important;
             font-weight: 500;
         }
         .form-control, .form-control:focus {
             background-color: #2a2a2a;
             border-color: #404040;
-            color: #ffffff !important; /* Texto que escribe el usuario en blanco */
+            color: #ffffff !important;
         }
         .form-control::placeholder {
-            color: #a0a0a0; /* Placeholder visible pero sutil */
+            color: #a0a0a0;
         }
         .form-control:focus {
             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
@@ -47,20 +53,27 @@
             font-size: 0.9rem;
         }
         .table {
-            color: #ffffff !important; /* Textos de la tabla en blanco */
+            color: #ffffff !important;
         }
         .table-dark {
             background-color: #181818;
             color: #ffffff;
         }
         .text-muted {
-            color: #b0b0b0 !important; /* Texto secundario más claro para mejor lectura */
+            color: #b0b0b0 !important;
+        }
+        footer {
+            background-color: #181818;
+            border-top: 1px solid #2d2d2d;
+            color: #a0a0a0;
+            padding: 1rem 0;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <div class="container py-5">
+    <div class="container py-5 main-container">
         <!-- Header -->
         <div class="row mb-4">
             <div class="col text-center">
@@ -112,7 +125,7 @@
                         </div>
                         <div id="actionContainer" class="text-center">
                             <a id="downloadZipBtn" href="#" class="btn btn-success w-100 py-2 fw-bold d-none">
-                                <i class="fa-solid fa-file-zipper me-2"></i> Descargar ZIP (.zip)
+                                <i class="fa-solid fa-file-zipper me-2"></i> Descargar ZIP (.zip) de nuevo
                             </a>
                         </div>
                     </div>
@@ -150,7 +163,14 @@
         </div>
     </div>
 
-    <!-- JavaScript para manejar eventos y SSE -->
+    <!-- Footer con atribución -->
+    <footer>
+        <div class="container">
+            <p class="mb-0">HRA-DL Web Application &bull; Desarrollado por <span class="text-white fw-bold">adrianmejiam</span></p>
+        </div>
+    </footer>
+
+    <!-- JavaScript para manejar eventos, SSE y Auto-descarga -->
     <script>
         let currentEventSource = null;
 
@@ -188,12 +208,17 @@
                     currentEventSource.onmessage = function(event) {
                         const line = event.data;
                         if (line === '[DONE]') {
-                            consoleBox.innerHTML += `<div class="text-success">[DONE] ¡Descarga finalizada con éxito!</div>`;
+                            consoleBox.innerHTML += `<div class="text-success">[DONE] ¡Descarga finalizada con éxito! Iniciando descarga automática del ZIP...</div>`;
                             consoleBox.scrollTop = consoleBox.scrollHeight;
                             currentEventSource.close();
                             
+                            // Iniciar descarga automática en el navegador
+                            window.location.href = `/get-zip/${sessionId}`;
+                            
+                            // Mostrar también el botón por si el usuario desea descargarlo de nuevo
                             downloadZipBtn.href = `/get-zip/${sessionId}`;
                             downloadZipBtn.classList.remove('d-none');
+
                             submitBtn.disabled = false;
                             submitBtn.innerHTML = '<i class="fa-solid fa-play me-1"></i> Iniciar Descarga Lossless';
                             loadSessions();
